@@ -37,6 +37,7 @@ public class CouchbaseTableWriteFunction<V> extends CouchbaseTableFunctionBase<V
 
   public CouchbaseTableWriteFunction(Class<V> valueClass) {
     super(valueClass);
+    LOGGER.info(String.format("Write function for bucket %s initialized successfully", bucketName));
   }
 
   @Override
@@ -55,15 +56,16 @@ public class CouchbaseTableWriteFunction<V> extends CouchbaseTableFunctionBase<V
     };
     Document document;
     if (JsonDocument.class.isAssignableFrom(valueClass)) {
-      document = (JsonDocument) record;
+      document = JsonDocument.create(key, ttl, ((JsonDocument) record).content());
     } else {
-      document = ByteArrayDocument.create(key, valueSerde.toBytes(record));
+      document = ByteArrayDocument.create(key, ttl, valueSerde.toBytes(record));
     }
-    Single<Document> singleObservable = bucket.async().upsert(document).toSingle();
+    Single<Document> singleObservable = bucket.async().upsert(document, timeout, timeUnit).toSingle();
     singleObservable.subscribe(subscriber);
     return putFuture;
   }
 
+  //TODO deleting null key results in waiting forever
   @Override
   public CompletableFuture<Void> deleteAsync(String key) {
     CompletableFuture<Void> deleteFuture = new CompletableFuture<>();
@@ -84,7 +86,7 @@ public class CouchbaseTableWriteFunction<V> extends CouchbaseTableFunctionBase<V
     } else {
       document = ByteArrayDocument.create(key);
     }
-    Single<Document> singleObservable = bucket.async().remove(document).toSingle();
+    Single<Document> singleObservable = bucket.async().remove(document, timeout, timeUnit).toSingle();
     singleObservable.subscribe(subscriber);
     return deleteFuture;
   }

@@ -39,6 +39,7 @@ public class CouchbaseTableReadFunction<V> extends CouchbaseTableFunctionBase<V>
 
   public CouchbaseTableReadFunction(Class<V> valueClass) {
     super(valueClass);
+    LOGGER.info(String.format("Read function for bucket %s initialized successfully", bucketName));
   }
 
   @Override
@@ -47,6 +48,9 @@ public class CouchbaseTableReadFunction<V> extends CouchbaseTableFunctionBase<V>
     SingleSubscriber<Document> subscriber = new SingleSubscriber<Document>() {
       @Override
       public void onSuccess(Document v) {
+        if (v == null) {
+          getFuture.complete(null);
+        }
         if (JsonDocument.class.isAssignableFrom(valueClass)) {
           getFuture.complete((V) v);
         } else {
@@ -65,7 +69,7 @@ public class CouchbaseTableReadFunction<V> extends CouchbaseTableFunctionBase<V>
     } else {
       document = ByteArrayDocument.create(key);
     }
-    Single<Document> singleObservable = bucket.async().get(document).toSingle();
+    Single<Document> singleObservable = bucket.async().get(document, timeout, timeUnit).toSingle();
     singleObservable.subscribe(subscriber);
     return getFuture;
   }

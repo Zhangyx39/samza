@@ -25,6 +25,7 @@ import com.couchbase.client.java.CouchbaseCluster;
 import com.google.common.collect.ImmutableList;
 import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import org.apache.samza.context.Context;
 import org.apache.samza.operators.functions.ClosableFunction;
 import org.apache.samza.operators.functions.InitableFunction;
@@ -41,15 +42,22 @@ public class CouchbaseTableFunctionBase<V> implements InitableFunction, Closable
   protected Bucket bucket;
   protected Class<V> valueClass;
   protected Serde<V> valueSerde;
+  protected long timeout = 0L;
+  protected TimeUnit timeUnit;
+  protected int ttl = 0; // default value 0 means no ttl, data will be storedforever
 
+  //TODO maybe we can create a builder class to create both read and write functions for the same bucket so that users don't need to type in the same things twice
   public CouchbaseTableFunctionBase(Class<V> valueClass) {
     this.valueClass = valueClass;
   }
 
   public void initial() {
+    //TODO validation
     cluster = CouchbaseCluster.create(clusterNodes);
     cluster.authenticate(username, password);
     bucket = cluster.openBucket(bucketName);
+    //TODO set retry policy
+    //TODO enable SSL connection
   }
 
   @Override
@@ -67,6 +75,7 @@ public class CouchbaseTableFunctionBase<V> implements InitableFunction, Closable
 
   public <T extends CouchbaseTableFunctionBase<V>> T withClusters(Collection<String> clusters) {
     this.clusterNodes = ImmutableList.copyOf(clusters);
+    //TODO try to get rid of this type casting
     return (T) this;
   }
 
@@ -82,6 +91,17 @@ public class CouchbaseTableFunctionBase<V> implements InitableFunction, Closable
 
   public <T extends CouchbaseTableFunctionBase<V>> T withBucketName(String bucketName) {
     this.bucketName = bucketName;
+    return (T) this;
+  }
+
+  public <T extends CouchbaseTableFunctionBase<V>> T withTimeout(long timeout, TimeUnit timeUnit) {
+    this.timeout = timeout;
+    this.timeUnit = timeUnit;
+    return (T) this;
+  }
+
+  public <T extends CouchbaseTableFunctionBase<V>> T withTTL(int ttl) {
+    this.ttl = ttl;
     return (T) this;
   }
 }
