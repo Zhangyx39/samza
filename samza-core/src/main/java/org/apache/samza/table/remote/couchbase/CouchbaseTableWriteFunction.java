@@ -29,6 +29,10 @@ public class CouchbaseTableWriteFunction<V> extends CouchbaseTableFunctionBase<V
     implements TableWriteFunction<String, V> {
   private static final Logger LOGGER = LoggerFactory.getLogger(CouchbaseTableReadFunction.class);
 
+  public CouchbaseTableWriteFunction(Class<V> valueClass) {
+    super(valueClass);
+  }
+
   @Override
   public CompletableFuture<Void> putAsync(String key, V record) {
     return null;

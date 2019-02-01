@@ -19,7 +19,11 @@
 
 package org.apache.samza.table.remote.couchbase;
 
-import com.couchbase.client.java.CouchbaseCluster;
+import com.couchbase.client.java.document.BinaryDocument;
+import com.couchbase.client.java.document.Document;
+import org.apache.samza.SamzaException;
+import rx.Single;
+import rx.SingleSubscriber;
 import com.couchbase.client.java.document.JsonDocument;
 import com.google.common.collect.ImmutableList;
 import java.util.concurrent.CompletableFuture;
@@ -32,15 +36,37 @@ public class CouchbaseTableReadFunction<V> extends CouchbaseTableFunctionBase<V>
     implements TableReadFunction<String, V> {
   private static final Logger LOGGER = LoggerFactory.getLogger(CouchbaseTableReadFunction.class);
 
-  private void initial() {
-    cluster = CouchbaseCluster.create(clusterNodes);
-    cluster.authenticate(username, password);
-    bucket = cluster.openBucket(bucketName);
+  public CouchbaseTableReadFunction(Class<V> valueClass) {
+    super(valueClass);
   }
 
   @Override
   public CompletableFuture<V> getAsync(String s) {
-    return CompletableFuture.supplyAsync(() -> (V) bucket.get(s));
+    CompletableFuture<V> getFuture = new CompletableFuture<>();
+    SingleSubscriber<Document> subscriber = new SingleSubscriber<Document>() {
+      @Override
+      public void onSuccess(Document v) {
+        if (JsonDocument.class.isAssignableFrom(valueClass)) {
+          getFuture.complete((V) v);
+        } else {
+          getFuture.complete(valueSerde.fromBytes((byte[]) v.content()));
+        }
+      }
+
+      @Override
+      public void onError(Throwable error) {
+        throw new SamzaException(String.format("Failed to get key %s", s), error);
+      }
+    };
+    Document document;
+    if (JsonDocument.class.isAssignableFrom(valueClass)) {
+      document = JsonDocument.create(s);
+    } else {
+      document = BinaryDocument.create(s);
+    }
+    Single<Document> single = bucket.async().get(document).toSingle();
+    single.subscribe(subscriber);
+    return getFuture;
   }
 
   @Override
@@ -50,7 +76,7 @@ public class CouchbaseTableReadFunction<V> extends CouchbaseTableFunctionBase<V>
 
   public static void main(String[] args) {
     CouchbaseTableReadFunction<JsonDocument> readFunction =
-        new CouchbaseTableReadFunction<JsonDocument>().withClusters(ImmutableList.of("localhost"))
+        new CouchbaseTableReadFunction<>(JsonDocument.class).withClusters(ImmutableList.of("localhost"))
             .withUsername("yixzhang")
             .withPassword("344046")
             .withBucketName("travel-sample");

@@ -28,6 +28,7 @@ import java.util.List;
 import org.apache.samza.context.Context;
 import org.apache.samza.operators.functions.ClosableFunction;
 import org.apache.samza.operators.functions.InitableFunction;
+import org.apache.samza.serializers.Serde;
 
 
 public class CouchbaseTableFunctionBase<V> implements InitableFunction, ClosableFunction {
@@ -38,6 +39,18 @@ public class CouchbaseTableFunctionBase<V> implements InitableFunction, Closable
   protected String bucketName;
   protected Cluster cluster;
   protected Bucket bucket;
+  protected Class<V> valueClass;
+  protected Serde<V> valueSerde;
+
+  public CouchbaseTableFunctionBase(Class<V> valueClass) {
+    this.valueClass = valueClass;
+  }
+
+  public void initial() {
+    cluster = CouchbaseCluster.create(clusterNodes);
+    cluster.authenticate(username, password);
+    bucket = cluster.openBucket(bucketName);
+  }
 
   @Override
   public void init(Context context) {
