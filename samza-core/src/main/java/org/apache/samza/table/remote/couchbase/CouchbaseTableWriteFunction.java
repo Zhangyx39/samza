@@ -19,10 +19,16 @@
 
 package org.apache.samza.table.remote.couchbase;
 
+import com.couchbase.client.java.document.ByteArrayDocument;
+import com.couchbase.client.java.document.Document;
+import com.couchbase.client.java.document.JsonDocument;
 import java.util.concurrent.CompletableFuture;
+import org.apache.samza.SamzaException;
 import org.apache.samza.table.remote.TableWriteFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import rx.Single;
+import rx.SingleSubscriber;
 
 
 public class CouchbaseTableWriteFunction<V> extends CouchbaseTableFunctionBase<V>
@@ -35,12 +41,52 @@ public class CouchbaseTableWriteFunction<V> extends CouchbaseTableFunctionBase<V
 
   @Override
   public CompletableFuture<Void> putAsync(String key, V record) {
-    return null;
+    CompletableFuture<Void> putFuture = new CompletableFuture<>();
+    SingleSubscriber<Document> subscriber = new SingleSubscriber<Document>() {
+      @Override
+      public void onSuccess(Document v) {
+        putFuture.complete(null);
+      }
+
+      @Override
+      public void onError(Throwable error) {
+        throw new SamzaException(String.format("Failed to insert key %s, value %s", key, record), error);
+      }
+    };
+    Document document;
+    if (JsonDocument.class.isAssignableFrom(valueClass)) {
+      document = (JsonDocument) record;
+    } else {
+      document = ByteArrayDocument.create(key, valueSerde.toBytes(record));
+    }
+    Single<Document> singleObservable = bucket.async().upsert(document).toSingle();
+    singleObservable.subscribe(subscriber);
+    return putFuture;
   }
 
   @Override
   public CompletableFuture<Void> deleteAsync(String key) {
-    return null;
+    CompletableFuture<Void> deleteFuture = new CompletableFuture<>();
+    SingleSubscriber<Document> subscriber = new SingleSubscriber<Document>() {
+      @Override
+      public void onSuccess(Document v) {
+        deleteFuture.complete(null);
+      }
+
+      @Override
+      public void onError(Throwable error) {
+        throw new SamzaException(String.format("Failed to delete key %s", key), error);
+      }
+    };
+    Document document;
+    if (JsonDocument.class.isAssignableFrom(valueClass)) {
+      document = JsonDocument.create(key);
+    } else {
+      document = ByteArrayDocument.create(key);
+    }
+    Single<Document> singleObservable = bucket.async().remove(document).toSingle();
+    singleObservable.subscribe(subscriber);
+    return deleteFuture;
   }
 
   @Override

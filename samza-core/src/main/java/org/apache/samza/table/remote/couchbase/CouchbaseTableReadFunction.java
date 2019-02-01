@@ -19,8 +19,9 @@
 
 package org.apache.samza.table.remote.couchbase;
 
-import com.couchbase.client.java.document.BinaryDocument;
+import com.couchbase.client.java.document.ByteArrayDocument;
 import com.couchbase.client.java.document.Document;
+import com.couchbase.client.java.document.json.JsonObject;
 import org.apache.samza.SamzaException;
 import rx.Single;
 import rx.SingleSubscriber;
@@ -41,7 +42,7 @@ public class CouchbaseTableReadFunction<V> extends CouchbaseTableFunctionBase<V>
   }
 
   @Override
-  public CompletableFuture<V> getAsync(String s) {
+  public CompletableFuture<V> getAsync(String key) {
     CompletableFuture<V> getFuture = new CompletableFuture<>();
     SingleSubscriber<Document> subscriber = new SingleSubscriber<Document>() {
       @Override
@@ -55,17 +56,17 @@ public class CouchbaseTableReadFunction<V> extends CouchbaseTableFunctionBase<V>
 
       @Override
       public void onError(Throwable error) {
-        throw new SamzaException(String.format("Failed to get key %s", s), error);
+        throw new SamzaException(String.format("Failed to get key %s", key), error);
       }
     };
     Document document;
     if (JsonDocument.class.isAssignableFrom(valueClass)) {
-      document = JsonDocument.create(s);
+      document = JsonDocument.create(key);
     } else {
-      document = BinaryDocument.create(s);
+      document = ByteArrayDocument.create(key);
     }
-    Single<Document> single = bucket.async().get(document).toSingle();
-    single.subscribe(subscriber);
+    Single<Document> singleObservable = bucket.async().get(document).toSingle();
+    singleObservable.subscribe(subscriber);
     return getFuture;
   }
 
@@ -76,14 +77,29 @@ public class CouchbaseTableReadFunction<V> extends CouchbaseTableFunctionBase<V>
 
   public static void main(String[] args) {
     CouchbaseTableReadFunction<JsonDocument> readFunction =
-        new CouchbaseTableReadFunction<>(JsonDocument.class).withClusters(ImmutableList.of("localhost"))
+        new CouchbaseTableReadFunction<>(JsonDocument.class)
+            .withClusters(ImmutableList.of("localhost"))
+            .withUsername("yixzhang")
+            .withPassword("344046")
+            .withBucketName("travel-sample");
+
+    CouchbaseTableWriteFunction<JsonDocument> writeFunction =
+        new CouchbaseTableWriteFunction<>(JsonDocument.class)
+            .withClusters(ImmutableList.of("localhost"))
             .withUsername("yixzhang")
             .withPassword("344046")
             .withBucketName("travel-sample");
 
     readFunction.initial();
+    writeFunction.initial();
 
-    System.out.println(readFunction.get("airline_1203"));
+    String key = "test";
+    JsonDocument doc = JsonDocument.create(key, JsonObject.fromJson("{\"test\": \"an item for testing\"}"));
+
+    writeFunction.put(key, doc);
+    System.out.println(readFunction.get(key));
+    writeFunction.delete(key);
+    System.out.println(readFunction.get(key));
 
     readFunction.close();
   }
