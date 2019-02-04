@@ -21,21 +21,24 @@ package org.apache.samza.table.remote.couchbase;
 
 import com.couchbase.client.java.document.ByteArrayDocument;
 import com.couchbase.client.java.document.Document;
-import com.couchbase.client.java.document.json.JsonObject;
-import org.apache.samza.SamzaException;
-import rx.Single;
-import rx.SingleSubscriber;
 import com.couchbase.client.java.document.JsonDocument;
+import com.couchbase.client.java.document.json.JsonObject;
 import com.google.common.collect.ImmutableList;
+import java.util.NoSuchElementException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import org.apache.samza.SamzaException;
 import org.apache.samza.table.remote.TableReadFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import rx.Single;
+import rx.SingleSubscriber;
 
 
 public class CouchbaseTableReadFunction<V> extends CouchbaseTableFunctionBase<V>
     implements TableReadFunction<String, V> {
-  private static final Logger LOGGER = LoggerFactory.getLogger(CouchbaseTableReadFunction.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(
+      CouchbaseTableReadFunction.class);
 
   public CouchbaseTableReadFunction(Class<V> valueClass) {
     super(valueClass);
@@ -60,7 +63,11 @@ public class CouchbaseTableReadFunction<V> extends CouchbaseTableFunctionBase<V>
 
       @Override
       public void onError(Throwable error) {
-        throw new SamzaException(String.format("Failed to get key %s", key), error);
+        if (error instanceof NoSuchElementException) {
+          getFuture.complete(null);
+        } else {
+          throw new SamzaException(String.format("Failed to get key %s", key), error);
+        }
       }
     };
     Document document;
@@ -81,18 +88,20 @@ public class CouchbaseTableReadFunction<V> extends CouchbaseTableFunctionBase<V>
 
   public static void main(String[] args) {
     CouchbaseTableReadFunction<JsonDocument> readFunction =
-        new CouchbaseTableReadFunction<>(JsonDocument.class)
-            .withClusters(ImmutableList.of("localhost"))
+        new CouchbaseTableReadFunction<>(JsonDocument.class).withClusters(ImmutableList.of("localhost"))
             .withUsername("yixzhang")
             .withPassword("344046")
-            .withBucketName("travel-sample");
+            .withBucketName("travel-sample")
+            .withTTL(100)
+            .withTimeout(10, TimeUnit.SECONDS);
 
     CouchbaseTableWriteFunction<JsonDocument> writeFunction =
-        new CouchbaseTableWriteFunction<>(JsonDocument.class)
-            .withClusters(ImmutableList.of("localhost"))
+        new CouchbaseTableWriteFunction<>(JsonDocument.class).withClusters(ImmutableList.of("localhost"))
             .withUsername("yixzhang")
             .withPassword("344046")
-            .withBucketName("travel-sample");
+            .withBucketName("travel-sample")
+            .withTTL(100)
+            .withTimeout(10, TimeUnit.SECONDS);
 
     readFunction.initial();
     writeFunction.initial();
