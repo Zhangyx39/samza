@@ -27,13 +27,12 @@ import org.apache.samza.SamzaException;
 import org.apache.samza.table.remote.TableWriteFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import rx.Single;
 import rx.SingleSubscriber;
 
 
-public class CouchbaseTableWriteFunction<V> extends CouchbaseTableFunctionBase<V>
+public class CouchbaseTableWriteFunction<V> extends BaseCouchbaseTableFunction<V>
     implements TableWriteFunction<String, V> {
-  private static final Logger LOGGER = LoggerFactory.getLogger(CouchbaseTableReadFunction.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(CouchbaseTableWriteFunction.class);
 
   public CouchbaseTableWriteFunction(Class<V> valueClass) {
     super(valueClass);
@@ -43,7 +42,13 @@ public class CouchbaseTableWriteFunction<V> extends CouchbaseTableFunctionBase<V
   @Override
   public CompletableFuture<Void> putAsync(String key, V record) {
     CompletableFuture<Void> putFuture = new CompletableFuture<>();
-    SingleSubscriber<Document> subscriber = new SingleSubscriber<Document>() {
+    Document document;
+    if (JsonDocument.class.isAssignableFrom(valueClass)) {
+      document = JsonDocument.create(key, ttl, ((JsonDocument) record).content());
+    } else {
+      document = ByteArrayDocument.create(key, ttl, valueSerde.toBytes(record));
+    }
+    bucket.async().upsert(document, timeout, timeUnit).toSingle().subscribe(new SingleSubscriber<Document>() {
       @Override
       public void onSuccess(Document v) {
         putFuture.complete(null);
@@ -51,17 +56,10 @@ public class CouchbaseTableWriteFunction<V> extends CouchbaseTableFunctionBase<V
 
       @Override
       public void onError(Throwable error) {
-        throw new SamzaException(String.format("Failed to insert key %s, value %s", key, record), error);
+        putFuture.completeExceptionally(
+            new SamzaException(String.format("Failed to insert key %s, value %s", key, record), error));
       }
-    };
-    Document document;
-    if (JsonDocument.class.isAssignableFrom(valueClass)) {
-      document = JsonDocument.create(key, ttl, ((JsonDocument) record).content());
-    } else {
-      document = ByteArrayDocument.create(key, ttl, valueSerde.toBytes(record));
-    }
-    Single<Document> singleObservable = bucket.async().upsert(document, timeout, timeUnit).toSingle();
-    singleObservable.subscribe(subscriber);
+    });
     return putFuture;
   }
 
@@ -69,7 +67,13 @@ public class CouchbaseTableWriteFunction<V> extends CouchbaseTableFunctionBase<V
   @Override
   public CompletableFuture<Void> deleteAsync(String key) {
     CompletableFuture<Void> deleteFuture = new CompletableFuture<>();
-    SingleSubscriber<Document> subscriber = new SingleSubscriber<Document>() {
+    Document document;
+    if (JsonDocument.class.isAssignableFrom(valueClass)) {
+      document = JsonDocument.create(key);
+    } else {
+      document = ByteArrayDocument.create(key);
+    }
+    bucket.async().remove(document, timeout, timeUnit).toSingle().subscribe(new SingleSubscriber<Document>() {
       @Override
       public void onSuccess(Document v) {
         deleteFuture.complete(null);
@@ -77,17 +81,9 @@ public class CouchbaseTableWriteFunction<V> extends CouchbaseTableFunctionBase<V
 
       @Override
       public void onError(Throwable error) {
-        throw new SamzaException(String.format("Failed to delete key %s", key), error);
+        deleteFuture.completeExceptionally(new SamzaException(String.format("Failed to delete key %s", key), error));
       }
-    };
-    Document document;
-    if (JsonDocument.class.isAssignableFrom(valueClass)) {
-      document = JsonDocument.create(key);
-    } else {
-      document = ByteArrayDocument.create(key);
-    }
-    Single<Document> singleObservable = bucket.async().remove(document, timeout, timeUnit).toSingle();
-    singleObservable.subscribe(subscriber);
+    });
     return deleteFuture;
   }
 

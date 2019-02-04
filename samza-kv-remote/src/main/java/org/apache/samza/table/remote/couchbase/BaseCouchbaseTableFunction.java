@@ -32,7 +32,7 @@ import org.apache.samza.operators.functions.InitableFunction;
 import org.apache.samza.serializers.Serde;
 
 
-public class CouchbaseTableFunctionBase<V> implements InitableFunction, ClosableFunction {
+public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction, ClosableFunction {
 
   protected List<String> clusterNodes;
   protected String username;
@@ -47,11 +47,12 @@ public class CouchbaseTableFunctionBase<V> implements InitableFunction, Closable
   protected int ttl = 0; // default value 0 means no ttl, data will be storedforever
 
   //TODO maybe we can create a builder class to create both read and write functions for the same bucket so that users don't need to type in the same things twice
-  public CouchbaseTableFunctionBase(Class<V> valueClass) {
+  public BaseCouchbaseTableFunction(Class<V> valueClass) {
     this.valueClass = valueClass;
   }
 
-  public void initial() {
+  @Override
+  public void init(Context context) {
     //TODO validation
     cluster = CouchbaseCluster.create(clusterNodes);
     cluster.authenticate(username, password);
@@ -61,46 +62,39 @@ public class CouchbaseTableFunctionBase<V> implements InitableFunction, Closable
   }
 
   @Override
-  public void init(Context context) {
-    cluster = CouchbaseCluster.create(clusterNodes);
-    cluster.authenticate(username, password);
-    bucket = cluster.openBucket(bucketName);
-  }
-
-  @Override
   public void close() {
     bucket.close();
     cluster.disconnect();
   }
 
-  public <T extends CouchbaseTableFunctionBase<V>> T withClusters(Collection<String> clusters) {
+  public <T extends BaseCouchbaseTableFunction<V>> T withClusters(Collection<String> clusters) {
     this.clusterNodes = ImmutableList.copyOf(clusters);
     //TODO try to get rid of this type casting
     return (T) this;
   }
 
-  public <T extends CouchbaseTableFunctionBase<V>> T withUsername(String username) {
+  public <T extends BaseCouchbaseTableFunction<V>> T withUsername(String username) {
     this.username = username;
     return (T) this;
   }
 
-  public <T extends CouchbaseTableFunctionBase<V>> T withPassword(String password) {
+  public <T extends BaseCouchbaseTableFunction<V>> T withPassword(String password) {
     this.password = password;
     return (T) this;
   }
 
-  public <T extends CouchbaseTableFunctionBase<V>> T withBucketName(String bucketName) {
+  public <T extends BaseCouchbaseTableFunction<V>> T withBucketName(String bucketName) {
     this.bucketName = bucketName;
     return (T) this;
   }
 
-  public <T extends CouchbaseTableFunctionBase<V>> T withTimeout(long timeout, TimeUnit timeUnit) {
+  public <T extends BaseCouchbaseTableFunction<V>> T withTimeout(long timeout, TimeUnit timeUnit) {
     this.timeout = timeout;
     this.timeUnit = timeUnit;
     return (T) this;
   }
 
-  public <T extends CouchbaseTableFunctionBase<V>> T withTTL(int ttl) {
+  public <T extends BaseCouchbaseTableFunction<V>> T withTtl(int ttl) {
     this.ttl = ttl;
     return (T) this;
   }
