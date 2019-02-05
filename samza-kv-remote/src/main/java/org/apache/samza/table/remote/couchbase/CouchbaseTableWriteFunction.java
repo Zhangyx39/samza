@@ -27,6 +27,7 @@ import org.apache.samza.SamzaException;
 import org.apache.samza.table.remote.TableWriteFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import rx.Single;
 import rx.SingleSubscriber;
 
 
@@ -48,7 +49,11 @@ public class CouchbaseTableWriteFunction<V> extends BaseCouchbaseTableFunction<V
     } else {
       document = ByteArrayDocument.create(key, ttl, valueSerde.toBytes(record));
     }
-    bucket.async().upsert(document, timeout, timeUnit).toSingle().subscribe(new SingleSubscriber<Document>() {
+    Single<Document> singleObservable = bucket.async().upsert(document, timeout, timeUnit).toSingle();
+    if (writeRetryWhenFunction != null) {
+      singleObservable = singleObservable.retryWhen(writeRetryWhenFunction);
+    }
+    singleObservable.subscribe(new SingleSubscriber<Document>() {
       @Override
       public void onSuccess(Document v) {
         putFuture.complete(null);
@@ -73,7 +78,11 @@ public class CouchbaseTableWriteFunction<V> extends BaseCouchbaseTableFunction<V
     } else {
       document = ByteArrayDocument.create(key);
     }
-    bucket.async().remove(document, timeout, timeUnit).toSingle().subscribe(new SingleSubscriber<Document>() {
+    Single<Document> singleObservable = bucket.async().remove(document, timeout, timeUnit).toSingle();
+    if (writeRetryWhenFunction != null) {
+      singleObservable = singleObservable.retryWhen(writeRetryWhenFunction);
+    }
+    singleObservable.subscribe(new SingleSubscriber<Document>() {
       @Override
       public void onSuccess(Document v) {
         deleteFuture.complete(null);
@@ -89,6 +98,10 @@ public class CouchbaseTableWriteFunction<V> extends BaseCouchbaseTableFunction<V
 
   @Override
   public boolean isRetriable(Throwable exception) {
+    if (writeRetryWhenFunction != null) {
+      return false;
+    }
     return false;
+    //TODO when do we allow retry?
   }
 }

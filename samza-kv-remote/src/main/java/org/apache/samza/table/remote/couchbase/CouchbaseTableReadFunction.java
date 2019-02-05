@@ -28,6 +28,7 @@ import org.apache.samza.SamzaException;
 import org.apache.samza.table.remote.TableReadFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import rx.Single;
 import rx.SingleSubscriber;
 
 
@@ -49,7 +50,11 @@ public class CouchbaseTableReadFunction<V> extends BaseCouchbaseTableFunction<V>
     } else {
       document = ByteArrayDocument.create(key);
     }
-    bucket.async().get(document, timeout, timeUnit).toSingle().subscribe(new SingleSubscriber<Document>() {
+    Single<Document> singleObservable = bucket.async().get(document, timeout, timeUnit).toSingle();
+    if (readRetryWhenFunction != null) {
+      singleObservable = singleObservable.retryWhen(readRetryWhenFunction);
+    }
+    singleObservable.subscribe(new SingleSubscriber<Document>() {
       @Override
       public void onSuccess(Document v) {
         if (v == null) {
@@ -76,6 +81,10 @@ public class CouchbaseTableReadFunction<V> extends BaseCouchbaseTableFunction<V>
 
   @Override
   public boolean isRetriable(Throwable throwable) {
+    if (readRetryWhenFunction != null) {
+      return false;
+    }
     return false;
+    //TODO when do we allow retry?
   }
 }
