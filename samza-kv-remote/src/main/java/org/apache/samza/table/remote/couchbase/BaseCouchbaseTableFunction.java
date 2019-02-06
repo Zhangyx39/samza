@@ -51,9 +51,13 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
   protected TimeUnit timeUnit;
   protected int ttl = 0; // default value 0 means no ttl, data will be stored forever
   protected boolean enableSsl = false;
+  protected boolean enableCertAuth = false;
   protected String sslKeystoreFile = null;
   protected String sslKeystorePassword = null;
   protected KeyStore sslKeyStore = null;
+  protected String sslTruststoreFile = null;
+  protected String sslTruststorePassword = null;
+  protected KeyStore sslTrustStore = null;
   protected RetryWhenFunction readRetryWhenFunction = null;
   protected RetryWhenFunction writeRetryWhenFunction = null;
 
@@ -66,13 +70,22 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
   public void init(Context context) {
     //TODO validation
     DefaultCouchbaseEnvironment.Builder envBuilder = DefaultCouchbaseEnvironment.builder();
+    // ssl settings
     if (enableSsl) {
-      envBuilder.sslEnabled(true).certAuthEnabled(true);
+      envBuilder.sslEnabled(true);
       if (sslKeyStore != null) {
         envBuilder.sslKeystore(sslKeyStore);
-      } else {
+      } else if (sslKeystoreFile != null && sslKeystorePassword != null) {
         envBuilder.sslKeystoreFile(sslKeystoreFile).sslKeystorePassword(sslKeystorePassword);
       }
+      if (sslTrustStore != null) {
+        envBuilder.sslTruststore(sslTrustStore);
+      } else if (sslTruststoreFile != null && sslTruststorePassword != null) {
+        envBuilder.sslTruststoreFile(sslTruststoreFile).sslTruststorePassword(sslTruststorePassword);
+      }
+    }
+    if (enableCertAuth) {
+      envBuilder.certAuthEnabled(true);
     }
     env = envBuilder.build();
     cluster = CouchbaseCluster.create(env, clusterNodes);
@@ -80,7 +93,6 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
       cluster.authenticate(username, password);
     }
     bucket = cluster.openBucket(bucketName);
-    //TODO set retry policy
   }
 
   @Override
@@ -125,13 +137,30 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
   public <T extends BaseCouchbaseTableFunction<V>> T withSslKeystoreFileAndPassword(String sslKeystoreFile,
       String sslKeystorePassword) {
     this.enableSsl = true;
+    this.enableCertAuth = true;
     this.sslKeystoreFile = sslKeystoreFile;
     this.sslKeystorePassword = sslKeystorePassword;
     return (T) this;
   }
 
   public <T extends BaseCouchbaseTableFunction<V>> T withSslKeystore(KeyStore sslKeyStore) {
+    this.enableSsl = true;
+    this.enableCertAuth = true;
     this.sslKeyStore = sslKeyStore;
+    return (T) this;
+  }
+
+  public <T extends BaseCouchbaseTableFunction<V>> T withSslTruststoreFileAndPassword(String sslTruststoreFile,
+      String sslTruststorePassword) {
+    this.enableSsl = true;
+    this.sslTruststoreFile = sslTruststoreFile;
+    this.sslTruststorePassword = sslTruststorePassword;
+    return (T) this;
+  }
+
+  public <T extends BaseCouchbaseTableFunction<V>> T withSslTruststore(KeyStore sslTrustStore) {
+    this.enableSsl = true;
+    this.sslTrustStore = sslTrustStore;
     return (T) this;
   }
 
