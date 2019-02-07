@@ -716,6 +716,7 @@ project(":samza-kv-remote_$scalaSuffix") {
     compile project(":samza-kv_$scalaSuffix")
     compile "org.scala-lang:scala-library:$scalaVersion"
     compile "com.couchbase.client:java-client:$couchbaseClientVersion"
+    compile "com.couchbase.client:encryption:$couchbaseEncryptionVersion"
     testCompile "junit:junit:$junitVersion"
     testCompile "org.scalatest:scalatest_$scalaSuffix:$scalaTestVersion"
   }
@@ -863,6 +864,7 @@ project(":samza-test_$scalaSuffix") {
     testCompile project(":samza-sql_$scalaSuffix").sourceSets.test.output
     testCompile "org.scalatest:scalatest_$scalaSuffix:$scalaTestVersion"
     testCompile "org.mockito:mockito-core:$mockitoVersion"
+    testCompile "com.couchbase.mock:CouchbaseMock:$couchbaseMockVersion"
     testRuntime "org.slf4j:slf4j-simple:$slf4jVersion"
   }
 

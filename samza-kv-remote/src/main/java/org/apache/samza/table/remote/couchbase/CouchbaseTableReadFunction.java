@@ -36,6 +36,10 @@ public class CouchbaseTableReadFunction<V> extends BaseCouchbaseTableFunction<V>
     implements TableReadFunction<String, V> {
   private static final Logger LOGGER = LoggerFactory.getLogger(CouchbaseTableReadFunction.class);
 
+  public CouchbaseTableReadFunction() {
+    super();
+  }
+
   public CouchbaseTableReadFunction(Class<V> valueClass) {
     super(valueClass);
     LOGGER.info(String.format("Read function for bucket %s initialized successfully", bucketName));
@@ -51,9 +55,9 @@ public class CouchbaseTableReadFunction<V> extends BaseCouchbaseTableFunction<V>
       document = ByteArrayDocument.create(key);
     }
     Single<Document> singleObservable = bucket.async().get(document, timeout, timeUnit).toSingle();
-    if (readRetryWhenFunction != null) {
-      singleObservable = singleObservable.retryWhen(readRetryWhenFunction);
-    }
+//    if (readRetryWhenFunction != null) {
+//      singleObservable = singleObservable.retryWhen(readRetryWhenFunction);
+//    }
     singleObservable.subscribe(new SingleSubscriber<Document>() {
       @Override
       public void onSuccess(Document v) {
@@ -81,9 +85,9 @@ public class CouchbaseTableReadFunction<V> extends BaseCouchbaseTableFunction<V>
 
   @Override
   public boolean isRetriable(Throwable throwable) {
-    if (readRetryWhenFunction != null) {
-      return false;
-    }
+//    if (readRetryWhenFunction != null) {
+//      return false;
+//    }
     return false;
     //TODO when do we allow retry?
   }

@@ -26,7 +26,9 @@ import com.couchbase.client.java.env.CouchbaseEnvironment;
 import com.couchbase.client.java.env.DefaultCouchbaseEnvironment;
 import com.couchbase.client.java.util.retry.RetryWhenFunction;
 import com.google.common.collect.ImmutableList;
+import java.io.Serializable;
 import java.security.KeyStore;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -36,30 +38,40 @@ import org.apache.samza.operators.functions.InitableFunction;
 import org.apache.samza.serializers.Serde;
 
 
-public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction, ClosableFunction {
+public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction, ClosableFunction, Serializable {
 
-  protected List<String> clusterNodes;
-  protected String username;
-  protected String password;
-  protected String bucketName;
+  // Clients
   protected transient CouchbaseEnvironment env;
   protected transient Cluster cluster;
   protected transient Bucket bucket;
-  protected Class<V> valueClass;
-  protected Serde<V> valueSerde;
+
+  // Function Settings
+  protected Class<V> valueClass = null;
+  protected Serde<V> valueSerde = null;
   protected long timeout = 0L;
-  protected TimeUnit timeUnit;
+  protected TimeUnit timeUnit = null;
   protected int ttl = 0; // default value 0 means no ttl, data will be stored forever
-  protected boolean enableSsl = false;
-  protected boolean enableCertAuth = false;
+
+  // Cluster Settings
+  protected List<String> clusterNodes = null;
+  protected String username = null;
+  protected String password = null;
+  protected String bucketName = null;
+
+  // Environment Settings
+  protected boolean sslEnabled = false;
+  protected boolean certAuthEnabled = false;
   protected String sslKeystoreFile = null;
   protected String sslKeystorePassword = null;
-  protected KeyStore sslKeyStore = null;
   protected String sslTruststoreFile = null;
   protected String sslTruststorePassword = null;
-  protected KeyStore sslTrustStore = null;
-  protected RetryWhenFunction readRetryWhenFunction = null;
-  protected RetryWhenFunction writeRetryWhenFunction = null;
+  protected int bootstrapCarrierDirectPort = -1;
+  protected int bootstrapCarrierSslPort = -1;
+  protected int bootstrapHttpDirectPort = -1;
+  protected int bootstrapHttpSslPort = -1;
+
+  public BaseCouchbaseTableFunction() {
+  }
 
   //TODO maybe we can create a builder class to create both read and write functions for the same bucket so that users don't need to type in the same things twice
   public BaseCouchbaseTableFunction(Class<V> valueClass) {
@@ -69,27 +81,36 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
   @Override
   public void init(Context context) {
     //TODO validation
-    DefaultCouchbaseEnvironment.Builder envBuilder = DefaultCouchbaseEnvironment.builder();
+    DefaultCouchbaseEnvironment.Builder envBuilder = new DefaultCouchbaseEnvironment.Builder();
     // ssl settings
-    if (enableSsl) {
-      envBuilder.sslEnabled(true);
-      if (sslKeyStore != null) {
-        envBuilder.sslKeystore(sslKeyStore);
-      } else if (sslKeystoreFile != null && sslKeystorePassword != null) {
-        envBuilder.sslKeystoreFile(sslKeystoreFile).sslKeystorePassword(sslKeystorePassword);
-      }
-      if (sslTrustStore != null) {
-        envBuilder.sslTruststore(sslTrustStore);
-      } else if (sslTruststoreFile != null && sslTruststorePassword != null) {
-        envBuilder.sslTruststoreFile(sslTruststoreFile).sslTruststorePassword(sslTruststorePassword);
-      }
+    envBuilder.sslEnabled(sslEnabled).certAuthEnabled(certAuthEnabled);
+    if (sslKeystoreFile != null) {
+      envBuilder.sslKeystoreFile(sslKeystoreFile);
     }
-    if (enableCertAuth) {
-      envBuilder.certAuthEnabled(true);
+    if (sslKeystorePassword != null) {
+      envBuilder.sslKeystorePassword(sslKeystorePassword);
+    }
+    if (sslTruststoreFile != null) {
+      envBuilder.sslTruststoreFile(sslTruststoreFile);
+    }
+    if (sslTruststorePassword != null) {
+      envBuilder.sslTruststorePassword(sslTruststorePassword);
+    }
+    if (bootstrapCarrierDirectPort != -1) {
+      envBuilder.bootstrapCarrierDirectPort(bootstrapCarrierDirectPort);
+    }
+    if (bootstrapCarrierSslPort != -1) {
+      envBuilder.bootstrapCarrierSslPort(bootstrapCarrierSslPort);
+    }
+    if (bootstrapHttpDirectPort != -1) {
+      envBuilder.bootstrapHttpDirectPort(bootstrapHttpDirectPort);
+    }
+    if (bootstrapHttpSslPort != -1) {
+      envBuilder.bootstrapHttpSslPort(bootstrapHttpSslPort);
     }
     env = envBuilder.build();
     cluster = CouchbaseCluster.create(env, clusterNodes);
-    if (!enableSsl) {
+    if (username != null && password != null) {
       cluster.authenticate(username, password);
     }
     bucket = cluster.openBucket(bucketName);
@@ -100,6 +121,22 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
     bucket.close();
     cluster.disconnect();
     env.shutdown();
+  }
+
+  public <T extends BaseCouchbaseTableFunction<V>> T withTimeout(long timeout, TimeUnit timeUnit) {
+    this.timeout = timeout;
+    this.timeUnit = timeUnit;
+    return (T) this;
+  }
+
+  public <T extends BaseCouchbaseTableFunction<V>> T withTtl(int ttl) {
+    this.ttl = ttl;
+    return (T) this;
+  }
+
+  public <T extends BaseCouchbaseTableFunction<V>> T withSerde(Serde<V> valueSerde) {
+    this.valueSerde = valueSerde;
+    return (T) this;
   }
 
   public <T extends BaseCouchbaseTableFunction<V>> T withClusters(Collection<String> clusters) {
@@ -123,54 +160,53 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
     return (T) this;
   }
 
-  public <T extends BaseCouchbaseTableFunction<V>> T withTimeout(long timeout, TimeUnit timeUnit) {
-    this.timeout = timeout;
-    this.timeUnit = timeUnit;
+  public <T extends BaseCouchbaseTableFunction<V>> T withSslEnabled(boolean sslEnabled) {
+    this.sslEnabled = sslEnabled;
     return (T) this;
   }
 
-  public <T extends BaseCouchbaseTableFunction<V>> T withTtl(int ttl) {
-    this.ttl = ttl;
+  public <T extends BaseCouchbaseTableFunction<V>> T withCertAuthEnabled(boolean certAuthEnabled) {
+    this.certAuthEnabled = certAuthEnabled;
     return (T) this;
   }
 
-  public <T extends BaseCouchbaseTableFunction<V>> T withSslKeystoreFileAndPassword(String sslKeystoreFile,
-      String sslKeystorePassword) {
-    this.enableSsl = true;
-    this.enableCertAuth = true;
+  public <T extends BaseCouchbaseTableFunction<V>> T withSslKeystoreFile(String sslKeystoreFile) {
     this.sslKeystoreFile = sslKeystoreFile;
+    return (T) this;
+  }
+
+  public <T extends BaseCouchbaseTableFunction<V>> T withSslKeystorePassword(String sslKeystorePassword) {
     this.sslKeystorePassword = sslKeystorePassword;
     return (T) this;
   }
 
-  public <T extends BaseCouchbaseTableFunction<V>> T withSslKeystore(KeyStore sslKeyStore) {
-    this.enableSsl = true;
-    this.enableCertAuth = true;
-    this.sslKeyStore = sslKeyStore;
+  public <T extends BaseCouchbaseTableFunction<V>> T withSslTruststoreFile(String sslTruststoreFile) {
+    this.sslTruststoreFile = sslTruststoreFile;
     return (T) this;
   }
 
-  public <T extends BaseCouchbaseTableFunction<V>> T withSslTruststoreFileAndPassword(String sslTruststoreFile,
-      String sslTruststorePassword) {
-    this.enableSsl = true;
-    this.sslTruststoreFile = sslTruststoreFile;
+  public <T extends BaseCouchbaseTableFunction<V>> T withSslTruststorePassword(String sslTruststorePassword) {
     this.sslTruststorePassword = sslTruststorePassword;
     return (T) this;
   }
 
-  public <T extends BaseCouchbaseTableFunction<V>> T withSslTruststore(KeyStore sslTrustStore) {
-    this.enableSsl = true;
-    this.sslTrustStore = sslTrustStore;
+  public <T extends BaseCouchbaseTableFunction<V>> T withBootstrapCarrierDirectPort(int bootstrapCarrierDirectPort) {
+    this.bootstrapCarrierDirectPort = bootstrapCarrierDirectPort;
     return (T) this;
   }
 
-  public <T extends BaseCouchbaseTableFunction<V>> T withReadRetryStrategy(RetryWhenFunction readRetryWhenFunction) {
-    this.readRetryWhenFunction = readRetryWhenFunction;
+  public <T extends BaseCouchbaseTableFunction<V>> T withBootstrapCarrierSslPort(int bootstrapCarrierSslPort) {
+    this.bootstrapCarrierSslPort = bootstrapCarrierSslPort;
     return (T) this;
   }
 
-  public <T extends BaseCouchbaseTableFunction<V>> T withWriteRetryStrategy(RetryWhenFunction writeRetryWhenFunction) {
-    this.writeRetryWhenFunction = writeRetryWhenFunction;
+  public <T extends BaseCouchbaseTableFunction<V>> T withBootstrapHttpDirectPort(int bootstrapHttpDirectPort) {
+    this.bootstrapHttpDirectPort = bootstrapHttpDirectPort;
+    return (T) this;
+  }
+
+  public <T extends BaseCouchbaseTableFunction<V>> T withBootstrapHttpSslPort(int bootstrapHttpSslPort) {
+    this.bootstrapHttpSslPort = bootstrapHttpSslPort;
     return (T) this;
   }
 }

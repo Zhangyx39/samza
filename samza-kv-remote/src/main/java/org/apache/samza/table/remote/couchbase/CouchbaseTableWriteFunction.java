@@ -50,9 +50,9 @@ public class CouchbaseTableWriteFunction<V> extends BaseCouchbaseTableFunction<V
       document = ByteArrayDocument.create(key, ttl, valueSerde.toBytes(record));
     }
     Single<Document> singleObservable = bucket.async().upsert(document, timeout, timeUnit).toSingle();
-    if (writeRetryWhenFunction != null) {
-      singleObservable = singleObservable.retryWhen(writeRetryWhenFunction);
-    }
+//    if (writeRetryWhenFunction != null) {
+//      singleObservable = singleObservable.retryWhen(writeRetryWhenFunction);
+//    }
     singleObservable.subscribe(new SingleSubscriber<Document>() {
       @Override
       public void onSuccess(Document v) {
@@ -79,9 +79,9 @@ public class CouchbaseTableWriteFunction<V> extends BaseCouchbaseTableFunction<V
       document = ByteArrayDocument.create(key);
     }
     Single<Document> singleObservable = bucket.async().remove(document, timeout, timeUnit).toSingle();
-    if (writeRetryWhenFunction != null) {
-      singleObservable = singleObservable.retryWhen(writeRetryWhenFunction);
-    }
+//    if (writeRetryWhenFunction != null) {
+//      singleObservable = singleObservable.retryWhen(writeRetryWhenFunction);
+//    }
     singleObservable.subscribe(new SingleSubscriber<Document>() {
       @Override
       public void onSuccess(Document v) {
@@ -98,9 +98,9 @@ public class CouchbaseTableWriteFunction<V> extends BaseCouchbaseTableFunction<V
 
   @Override
   public boolean isRetriable(Throwable exception) {
-    if (writeRetryWhenFunction != null) {
-      return false;
-    }
+//    if (writeRetryWhenFunction != null) {
+//      return false;
+//    }
     return false;
     //TODO when do we allow retry?
   }
