@@ -20,16 +20,15 @@
 package org.apache.samza.table.remote.couchbase;
 
 import com.couchbase.client.deps.io.netty.buffer.ByteBuf;
-import com.couchbase.client.deps.io.netty.buffer.Unpooled;
-import com.couchbase.client.deps.io.netty.util.CharsetUtil;
 import com.couchbase.client.deps.io.netty.util.ReferenceCountUtil;
 import com.couchbase.client.java.document.BinaryDocument;
-import com.couchbase.client.java.document.ByteArrayDocument;
 import com.couchbase.client.java.document.Document;
 import com.couchbase.client.java.document.JsonDocument;
+import java.util.Collection;
 import java.util.NoSuchElementException;
 import java.util.concurrent.CompletableFuture;
 import org.apache.samza.SamzaException;
+import org.apache.samza.context.Context;
 import org.apache.samza.table.remote.TableReadFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,24 +40,21 @@ public class CouchbaseTableReadFunction<V> extends BaseCouchbaseTableFunction<V>
     implements TableReadFunction<String, V> {
   private static final Logger LOGGER = LoggerFactory.getLogger(CouchbaseTableReadFunction.class);
 
-  public CouchbaseTableReadFunction() {
-    super();
+  public CouchbaseTableReadFunction(String tableId, Class<V> valueClass, Collection<String> clusterNodes,
+      String bucketName) {
+    super(tableId, valueClass, clusterNodes, bucketName);
   }
 
-  public CouchbaseTableReadFunction(Class<V> valueClass) {
-    super(valueClass);
-    LOGGER.info(String.format("Read function for bucket %s initialized successfully", bucketName));
+  @Override
+  public void init(Context context) {
+    super.init(context);
+    LOGGER.info(String.format("Read function for tableId %s, bucket %s initialized successfully", tableId, bucketName));
   }
 
   @Override
   public CompletableFuture<V> getAsync(String key) {
     CompletableFuture<V> getFuture = new CompletableFuture<>();
-    Document document;
-    if (JsonDocument.class.isAssignableFrom(valueClass)) {
-      document = JsonDocument.create(key);
-    } else {
-      document = BinaryDocument.create(key);
-    }
+    Document document = useJsonDocumentValue ? JsonDocument.create(key) : BinaryDocument.create(key);
     Single<Document> singleObservable = bucket.async().get(document, timeout, timeUnit).toSingle();
     if (readRetryWhenFunction != null) {
       singleObservable = singleObservable.retryWhen(readRetryWhenFunction);

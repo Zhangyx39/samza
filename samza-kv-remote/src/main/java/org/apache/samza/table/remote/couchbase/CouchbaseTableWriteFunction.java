@@ -21,11 +21,12 @@ package org.apache.samza.table.remote.couchbase;
 
 import com.couchbase.client.deps.io.netty.buffer.Unpooled;
 import com.couchbase.client.java.document.BinaryDocument;
-import com.couchbase.client.java.document.ByteArrayDocument;
 import com.couchbase.client.java.document.Document;
 import com.couchbase.client.java.document.JsonDocument;
+import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
 import org.apache.samza.SamzaException;
+import org.apache.samza.context.Context;
 import org.apache.samza.table.remote.TableWriteFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,20 +38,22 @@ public class CouchbaseTableWriteFunction<V> extends BaseCouchbaseTableFunction<V
     implements TableWriteFunction<String, V> {
   private static final Logger LOGGER = LoggerFactory.getLogger(CouchbaseTableWriteFunction.class);
 
-  public CouchbaseTableWriteFunction(Class<V> valueClass) {
-    super(valueClass);
-    LOGGER.info(String.format("Write function for bucket %s initialized successfully", bucketName));
+  public CouchbaseTableWriteFunction(String tableId, Class<V> valueClass, Collection<String> clusterNodes,
+      String bucketName) {
+    super(tableId, valueClass, clusterNodes, bucketName);
+  }
+
+  @Override
+  public void init(Context context) {
+    super.init(context);
+    LOGGER.info(String.format("Write function for tableId %s, bucket %s initialized successfully", tableId, bucketName));
   }
 
   @Override
   public CompletableFuture<Void> putAsync(String key, V record) {
     CompletableFuture<Void> putFuture = new CompletableFuture<>();
-    Document document;
-    if (JsonDocument.class.isAssignableFrom(valueClass)) {
-      document = JsonDocument.create(key, ttl, ((JsonDocument) record).content());
-    } else {
-      document = BinaryDocument.create(key, ttl, Unpooled.copiedBuffer(valueSerde.toBytes(record)));
-    }
+    Document document = useJsonDocumentValue ? JsonDocument.create(key, ttl, ((JsonDocument) record).content())
+        : BinaryDocument.create(key, ttl, Unpooled.copiedBuffer(valueSerde.toBytes(record)));
     Single<Document> singleObservable = bucket.async().upsert(document, timeout, timeUnit).toSingle();
     if (writeRetryWhenFunction != null) {
       singleObservable = singleObservable.retryWhen(writeRetryWhenFunction);
@@ -74,12 +77,7 @@ public class CouchbaseTableWriteFunction<V> extends BaseCouchbaseTableFunction<V
   @Override
   public CompletableFuture<Void> deleteAsync(String key) {
     CompletableFuture<Void> deleteFuture = new CompletableFuture<>();
-    Document document;
-    if (JsonDocument.class.isAssignableFrom(valueClass)) {
-      document = JsonDocument.create(key);
-    } else {
-      document = BinaryDocument.create(key);
-    }
+    Document document = useJsonDocumentValue ? JsonDocument.create(key) : BinaryDocument.create(key);
     Single<Document> singleObservable = bucket.async().remove(document, timeout, timeUnit).toSingle();
     if (writeRetryWhenFunction != null) {
       singleObservable = singleObservable.retryWhen(writeRetryWhenFunction);

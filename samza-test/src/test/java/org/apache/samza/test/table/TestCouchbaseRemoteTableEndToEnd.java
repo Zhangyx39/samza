@@ -119,12 +119,11 @@ public class TestCouchbaseRemoteTableEndToEnd extends AbstractIntegrationTestHar
           inputSystemDescriptor.getInputDescriptor("PageView", new NoOpSerde<>());
 
       CouchbaseTableReadFunction<String> readFunction =
-          new CouchbaseTableReadFunction<>(String.class)
-          .withBootstrapCarrierDirectPort(couchbaseMock.getCarrierPort(inputBucketName))
-          .withBootstrapHttpDirectPort(couchbaseMock.getHttpPort())
-          .withClusters(Collections.singletonList("couchbase://127.0.0.1"))
-          .withBucketName(inputBucketName)
-          .withSerde(new StringSerde());
+          new CouchbaseTableReadFunction<String>("input-table", String.class,
+              Collections.singletonList("couchbase://127.0.0.1"), inputBucketName).withBootstrapCarrierDirectPort(
+              couchbaseMock.getCarrierPort(inputBucketName))
+              .withBootstrapHttpDirectPort(couchbaseMock.getHttpPort())
+              .withSerde(new StringSerde());
 
       System.out.println(readFunction.toString());
 
@@ -133,9 +132,9 @@ public class TestCouchbaseRemoteTableEndToEnd extends AbstractIntegrationTestHar
       Table<KV<String, String>> inputTable = appDesc.getTable(inputTableDesc);
 
       appDesc.getInputStream(inputDescriptor).map(k -> KV.of(k, k)).join(inputTable, new JoinFunction()).map(n -> {
-          System.out.println(n.getKey() + ", " + n.getValue());
-          return n;
-        });
+        System.out.println(n.getKey() + ", " + n.getValue());
+        return n;
+      });
     };
 
     final LocalApplicationRunner runner = new LocalApplicationRunner(app, config);

@@ -22,16 +22,22 @@ package org.apache.samza.table.remote.couchbase;
 import com.couchbase.client.java.Bucket;
 import com.couchbase.client.java.Cluster;
 import com.couchbase.client.java.CouchbaseCluster;
+import com.couchbase.client.java.document.JsonDocument;
 import com.couchbase.client.java.env.CouchbaseEnvironment;
 import com.couchbase.client.java.env.DefaultCouchbaseEnvironment;
-import com.couchbase.client.java.util.retry.RetryWhenFunction;
+import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
+import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 import java.io.Serializable;
-import java.security.KeyStore;
-import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.ObjectUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.samza.context.Context;
 import org.apache.samza.operators.functions.ClosableFunction;
 import org.apache.samza.operators.functions.InitableFunction;
@@ -46,38 +52,46 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
   protected transient Bucket bucket;
 
   // Function Settings
-  protected Class<V> valueClass = null;
+  protected final String tableId;
+  protected final Class<V> valueClass;
+  protected final Boolean useJsonDocumentValue;
   protected Serde<V> valueSerde = null;
-  protected long timeout = 0L;
+  protected Long timeout = 0L;
   protected TimeUnit timeUnit = null;
-  protected int ttl = 0; // default value 0 means no ttl, data will be stored forever
+  protected Integer ttl = 0; // default value 0 means no ttl, data will be stored forever
   protected SerializableRetryWhenFunction readRetryWhenFunction = null;
   protected SerializableRetryWhenFunction writeRetryWhenFunction = null;
 
   // Cluster Settings
-  protected List<String> clusterNodes = null;
+  protected final List<String> clusterNodes;
+  protected final String bucketName;
   protected String username = null;
   protected String password = null;
-  protected String bucketName = null;
 
   // Environment Settings
-  protected boolean sslEnabled = false;
-  protected boolean certAuthEnabled = false;
+  protected Boolean sslEnabled = false;
+  protected Boolean certAuthEnabled = false;
   protected String sslKeystoreFile = null;
   protected String sslKeystorePassword = null;
   protected String sslTruststoreFile = null;
   protected String sslTruststorePassword = null;
-  protected int bootstrapCarrierDirectPort = -1;
-  protected int bootstrapCarrierSslPort = -1;
-  protected int bootstrapHttpDirectPort = -1;
-  protected int bootstrapHttpSslPort = -1;
-
-  public BaseCouchbaseTableFunction() {
-  }
+  protected Integer bootstrapCarrierDirectPort = null;
+  protected Integer bootstrapCarrierSslPort = null;
+  protected Integer bootstrapHttpDirectPort = null;
+  protected Integer bootstrapHttpSslPort = null;
 
   //TODO maybe we can create a builder class to create both read and write functions for the same bucket so that users don't need to type in the same things twice
-  public BaseCouchbaseTableFunction(Class<V> valueClass) {
+  public BaseCouchbaseTableFunction(String tableId, Class<V> valueClass, Collection<String> clusterNodes, String bucketName) {
+    Preconditions.checkArgument(StringUtils.isNotBlank(bucketName), "Table ßid is not allowed to be null, empty or blank.");
+    Preconditions.checkArgument(valueClass != null, "Value class is not allowed to be null.");
+    Preconditions.checkArgument(CollectionUtils.isNotEmpty(clusterNodes),
+        "Cluster nodes is not allowed to be null or empty.");
+    Preconditions.checkArgument(StringUtils.isNotEmpty(bucketName), "Bucket name is not allowed to be null or empty.");
+    this.tableId = tableId;
     this.valueClass = valueClass;
+    this.clusterNodes = ImmutableList.copyOf(clusterNodes);
+    this.bucketName = bucketName;
+    this.useJsonDocumentValue = JsonDocument.class.isAssignableFrom(valueClass);
   }
 
   @Override
@@ -98,16 +112,16 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
     if (sslTruststorePassword != null) {
       envBuilder.sslTruststorePassword(sslTruststorePassword);
     }
-    if (bootstrapCarrierDirectPort != -1) {
+    if (bootstrapCarrierDirectPort != null) {
       envBuilder.bootstrapCarrierDirectPort(bootstrapCarrierDirectPort);
     }
-    if (bootstrapCarrierSslPort != -1) {
+    if (bootstrapCarrierSslPort != null) {
       envBuilder.bootstrapCarrierSslPort(bootstrapCarrierSslPort);
     }
-    if (bootstrapHttpDirectPort != -1) {
+    if (bootstrapHttpDirectPort != null) {
       envBuilder.bootstrapHttpDirectPort(bootstrapHttpDirectPort);
     }
-    if (bootstrapHttpSslPort != -1) {
+    if (bootstrapHttpSslPort != null) {
       envBuilder.bootstrapHttpSslPort(bootstrapHttpSslPort);
     }
     env = envBuilder.build();
@@ -128,6 +142,7 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
   public <T extends BaseCouchbaseTableFunction<V>> T withTimeout(long timeout, TimeUnit timeUnit) {
     this.timeout = timeout;
     this.timeUnit = timeUnit;
+    //TODO try to get rid of this type casting
     return (T) this;
   }
 
@@ -153,24 +168,9 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
     return (T) this;
   }
 
-  public <T extends BaseCouchbaseTableFunction<V>> T withClusters(Collection<String> clusters) {
-    this.clusterNodes = ImmutableList.copyOf(clusters);
-    //TODO try to get rid of this type casting
-    return (T) this;
-  }
-
-  public <T extends BaseCouchbaseTableFunction<V>> T withUsername(String username) {
+  public <T extends BaseCouchbaseTableFunction<V>> T withUsernameAndPassword(String username, String password) {
     this.username = username;
-    return (T) this;
-  }
-
-  public <T extends BaseCouchbaseTableFunction<V>> T withPassword(String password) {
     this.password = password;
-    return (T) this;
-  }
-
-  public <T extends BaseCouchbaseTableFunction<V>> T withBucketName(String bucketName) {
-    this.bucketName = bucketName;
     return (T) this;
   }
 
