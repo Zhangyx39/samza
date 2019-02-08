@@ -19,6 +19,11 @@
 
 package org.apache.samza.table.remote.couchbase;
 
+import com.couchbase.client.deps.io.netty.buffer.ByteBuf;
+import com.couchbase.client.deps.io.netty.buffer.Unpooled;
+import com.couchbase.client.deps.io.netty.util.CharsetUtil;
+import com.couchbase.client.deps.io.netty.util.ReferenceCountUtil;
+import com.couchbase.client.java.document.BinaryDocument;
 import com.couchbase.client.java.document.ByteArrayDocument;
 import com.couchbase.client.java.document.Document;
 import com.couchbase.client.java.document.JsonDocument;
@@ -52,12 +57,12 @@ public class CouchbaseTableReadFunction<V> extends BaseCouchbaseTableFunction<V>
     if (JsonDocument.class.isAssignableFrom(valueClass)) {
       document = JsonDocument.create(key);
     } else {
-      document = ByteArrayDocument.create(key);
+      document = BinaryDocument.create(key);
     }
     Single<Document> singleObservable = bucket.async().get(document, timeout, timeUnit).toSingle();
-//    if (readRetryWhenFunction != null) {
-//      singleObservable = singleObservable.retryWhen(readRetryWhenFunction);
-//    }
+    if (readRetryWhenFunction != null) {
+      singleObservable = singleObservable.retryWhen(readRetryWhenFunction);
+    }
     singleObservable.subscribe(new SingleSubscriber<Document>() {
       @Override
       public void onSuccess(Document v) {
@@ -67,7 +72,11 @@ public class CouchbaseTableReadFunction<V> extends BaseCouchbaseTableFunction<V>
         if (JsonDocument.class.isAssignableFrom(valueClass)) {
           getFuture.complete((V) v);
         } else {
-          getFuture.complete(valueSerde.fromBytes((byte[]) v.content()));
+          ByteBuf buffer = (ByteBuf) v.content();
+          byte[] bytes = new byte[buffer.readableBytes()];
+          buffer.readBytes(bytes);
+          getFuture.complete(valueSerde.fromBytes(bytes));
+          ReferenceCountUtil.release(buffer);
         }
       }
 
@@ -85,9 +94,9 @@ public class CouchbaseTableReadFunction<V> extends BaseCouchbaseTableFunction<V>
 
   @Override
   public boolean isRetriable(Throwable throwable) {
-//    if (readRetryWhenFunction != null) {
-//      return false;
-//    }
+    if (readRetryWhenFunction != null) {
+      return false;
+    }
     return false;
     //TODO when do we allow retry?
   }

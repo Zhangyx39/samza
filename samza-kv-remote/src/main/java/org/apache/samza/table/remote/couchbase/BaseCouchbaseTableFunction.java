@@ -51,6 +51,8 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
   protected long timeout = 0L;
   protected TimeUnit timeUnit = null;
   protected int ttl = 0; // default value 0 means no ttl, data will be stored forever
+  protected SerializableRetryWhenFunction readRetryWhenFunction = null;
+  protected SerializableRetryWhenFunction writeRetryWhenFunction = null;
 
   // Cluster Settings
   protected List<String> clusterNodes = null;
@@ -136,6 +138,18 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
 
   public <T extends BaseCouchbaseTableFunction<V>> T withSerde(Serde<V> valueSerde) {
     this.valueSerde = valueSerde;
+    return (T) this;
+  }
+
+  public <T extends BaseCouchbaseTableFunction<V>> T withReadRetryWhenFunction(
+      SerializableRetryWhenFunction readRetryWhenFunction) {
+    this.readRetryWhenFunction = readRetryWhenFunction;
+    return (T) this;
+  }
+
+  public <T extends BaseCouchbaseTableFunction<V>> T withWriteRetryWhenFunction(
+      SerializableRetryWhenFunction writeRetryWhenFunction) {
+    this.writeRetryWhenFunction = writeRetryWhenFunction;
     return (T) this;
   }
 
