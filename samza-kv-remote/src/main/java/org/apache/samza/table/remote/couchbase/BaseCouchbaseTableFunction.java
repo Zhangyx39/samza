@@ -136,7 +136,7 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
   public void close() {
     bucket.close();
     cluster.disconnect();
-    env.shutdown();
+    env.shutdownAsync().toBlocking().single();
   }
 
   public <T extends BaseCouchbaseTableFunction<V>> T withTimeout(long timeout, TimeUnit timeUnit) {

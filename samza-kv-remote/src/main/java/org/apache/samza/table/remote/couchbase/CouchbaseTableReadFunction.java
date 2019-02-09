@@ -69,8 +69,13 @@ public class CouchbaseTableReadFunction<V> extends BaseCouchbaseTableFunction<V>
           getFuture.complete((V) v);
         } else {
           ByteBuf buffer = (ByteBuf) v.content();
-          byte[] bytes = new byte[buffer.readableBytes()];
-          buffer.readBytes(bytes);
+          byte[] bytes;
+          if (buffer.hasArray() && buffer.arrayOffset() == 0 && buffer.readableBytes() == buffer.array().length) {
+            bytes = buffer.array();
+          } else {
+            bytes = new byte[buffer.readableBytes()];
+            buffer.readBytes(bytes);
+          }
           getFuture.complete(valueSerde.fromBytes(bytes));
           ReferenceCountUtil.release(buffer);
         }

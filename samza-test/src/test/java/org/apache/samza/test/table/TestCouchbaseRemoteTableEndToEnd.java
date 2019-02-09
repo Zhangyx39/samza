@@ -23,6 +23,8 @@ import com.couchbase.client.java.Bucket;
 import com.couchbase.client.java.Cluster;
 import com.couchbase.client.java.CouchbaseCluster;
 import com.couchbase.client.java.document.ByteArrayDocument;
+import com.couchbase.client.java.document.JsonDocument;
+import com.couchbase.client.java.document.json.JsonObject;
 import com.couchbase.client.java.env.CouchbaseEnvironment;
 import com.couchbase.client.java.env.DefaultCouchbaseEnvironment;
 import com.couchbase.mock.BucketConfiguration;
@@ -31,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import org.apache.samza.application.StreamApplication;
 import org.apache.samza.config.Config;
 import org.apache.samza.config.MapConfig;
@@ -43,9 +46,14 @@ import org.apache.samza.system.descriptors.DelegatingSystemDescriptor;
 import org.apache.samza.system.descriptors.GenericInputDescriptor;
 import org.apache.samza.table.Table;
 import org.apache.samza.table.descriptors.RemoteTableDescriptor;
+import org.apache.samza.table.remote.TableReadFunction;
 import org.apache.samza.table.remote.couchbase.CouchbaseTableReadFunction;
+import org.apache.samza.table.remote.couchbase.CouchbaseTableWriteFunction;
 import org.apache.samza.test.harness.AbstractIntegrationTestHarness;
 import org.apache.samza.test.util.Base64Serializer;
+import org.junit.After;
+import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 
 
@@ -53,6 +61,8 @@ public class TestCouchbaseRemoteTableEndToEnd extends AbstractIntegrationTestHar
   protected CouchbaseEnvironment couchbaseEnvironment;
   protected CouchbaseMock couchbaseMock;
   protected Cluster cluster;
+  protected String inputBucketName = "inputBucket";
+  protected String outputBucketName = "outputBucket";
 
   protected void createMockBuckets(List<String> bucketNames) throws Exception {
     ArrayList<BucketConfiguration> configList = new ArrayList<>();
@@ -60,8 +70,6 @@ public class TestCouchbaseRemoteTableEndToEnd extends AbstractIntegrationTestHar
     couchbaseMock = new CouchbaseMock(0, configList);
     couchbaseMock.start();
     couchbaseMock.waitForStartup();
-    System.out.println("carrier port" + couchbaseMock.getCarrierPort("inputBucket"));
-    System.out.println("http port" + couchbaseMock.getHttpPort());
   }
 
   protected BucketConfiguration configBucket(String bucketName) {
@@ -80,7 +88,17 @@ public class TestCouchbaseRemoteTableEndToEnd extends AbstractIntegrationTestHar
     cluster = CouchbaseCluster.create(couchbaseEnvironment, "couchbase://127.0.0.1");
   }
 
-  protected void shutdownMock() {
+  @Before
+  public void setup() throws Exception {
+    List<String> bucketNames = new ArrayList<>();
+    bucketNames.add(inputBucketName);
+    bucketNames.add(outputBucketName);
+    createMockBuckets(bucketNames);
+    initClient();
+  }
+
+  @After
+  public void shutdownMock() {
     cluster.disconnect();
     couchbaseEnvironment.shutdownAsync().toBlocking().single();
     couchbaseMock.stop();
@@ -88,67 +106,77 @@ public class TestCouchbaseRemoteTableEndToEnd extends AbstractIntegrationTestHar
 
   @Test
   public void testDummy() throws Exception {
-    List<String> bucketNames = new ArrayList<>();
-    String inputBucketName = "inputBucket";
-    String outputBucketName = "outputBucket";
-    bucketNames.add(inputBucketName);
-    createMockBuckets(bucketNames);
-    initClient();
 
     Bucket inputBucket = cluster.openBucket(inputBucketName);
 
-    inputBucket.upsert(ByteArrayDocument.create("1", "a".getBytes()));
-    inputBucket.upsert(ByteArrayDocument.create("2", "b".getBytes()));
-    inputBucket.upsert(ByteArrayDocument.create("3", "c".getBytes()));
-    inputBucket.upsert(ByteArrayDocument.create("4", "d".getBytes()));
+    inputBucket.upsert(ByteArrayDocument.create("Alice", "20".getBytes()));
+    inputBucket.upsert(ByteArrayDocument.create("Bob", "30".getBytes()));
+    inputBucket.upsert(ByteArrayDocument.create("Chris", "40".getBytes()));
+    inputBucket.upsert(ByteArrayDocument.create("David", "50".getBytes()));
 
-//    int count = 10;
-    String[] pageViews = new String[]{"1", "2", "3", "4"};
+    inputBucket.close();
+
+    String[] users = new String[]{"Alice", "Bob", "Chris", "David"};
 
     int partitionCount = 1;
     Map<String, String> configs = TestLocalTableEndToEnd.getBaseJobConfig(bootstrapUrl(), zkConnect());
 
-    configs.put("streams.PageView.samza.system", "test");
-    configs.put("streams.PageView.source", Base64Serializer.serialize(pageViews));
-    configs.put("streams.PageView.partitionCount", String.valueOf(partitionCount));
+    configs.put("streams.User.samza.system", "test");
+    configs.put("streams.User.source", Base64Serializer.serialize(users));
+    configs.put("streams.User.partitionCount", String.valueOf(partitionCount));
     Config config = new MapConfig(configs);
 
     final StreamApplication app = appDesc -> {
       DelegatingSystemDescriptor inputSystemDescriptor = new DelegatingSystemDescriptor("test");
       GenericInputDescriptor<String> inputDescriptor =
-          inputSystemDescriptor.getInputDescriptor("PageView", new NoOpSerde<>());
+          inputSystemDescriptor.getInputDescriptor("User", new NoOpSerde<>());
 
-      CouchbaseTableReadFunction<String> readFunction =
-          new CouchbaseTableReadFunction<String>("input-table", String.class,
-              Collections.singletonList("couchbase://127.0.0.1"), inputBucketName).withBootstrapCarrierDirectPort(
-              couchbaseMock.getCarrierPort(inputBucketName))
-              .withBootstrapHttpDirectPort(couchbaseMock.getHttpPort())
-              .withSerde(new StringSerde());
+      CouchbaseTableReadFunction<String> readFunction = new CouchbaseTableReadFunction<>("input-table", String.class,
+          Collections.singletonList("couchbase://127.0.0.1"), inputBucketName).withBootstrapCarrierDirectPort(
+          couchbaseMock.getCarrierPort(inputBucketName))
+          .withBootstrapHttpDirectPort(couchbaseMock.getHttpPort())
+          .withSerde(new StringSerde());
 
-      System.out.println(readFunction.toString());
+      CouchbaseTableWriteFunction<JsonDocument> writeFunction =
+          new CouchbaseTableWriteFunction<>("output-table", JsonDocument.class,
+              Collections.singletonList("couchbase://127.0.0.1"), outputBucketName).withBootstrapCarrierDirectPort(
+              couchbaseMock.getCarrierPort(outputBucketName)).withBootstrapHttpDirectPort(couchbaseMock.getHttpPort());
 
       RemoteTableDescriptor<String, String> inputTableDesc = new RemoteTableDescriptor<>("input-table");
       inputTableDesc.withReadFunction(readFunction);
       Table<KV<String, String>> inputTable = appDesc.getTable(inputTableDesc);
 
-      appDesc.getInputStream(inputDescriptor).map(k -> KV.of(k, k)).join(inputTable, new JoinFunction()).map(n -> {
-        System.out.println(n.getKey() + ", " + n.getValue());
-        return n;
-      });
+      RemoteTableDescriptor<String, JsonDocument> outputTableDesc = new RemoteTableDescriptor<>("output-table");
+      outputTableDesc.withReadFunction(new DummyReadFunction<>()).withWriteFunction(writeFunction);
+      Table<KV<String, JsonDocument>> outputTable = appDesc.getTable(outputTableDesc);
+
+      appDesc.getInputStream(inputDescriptor)
+          .map(k -> KV.of(k, k))
+          .join(inputTable, new JoinFunction())
+          .sendTo(outputTable);
     };
 
     final LocalApplicationRunner runner = new LocalApplicationRunner(app, config);
     executeRun(runner, config);
     runner.waitForFinish();
-    shutdownMock();
+
+    Bucket outputBucket = cluster.openBucket(outputBucketName);
+
+    Assert.assertEquals("{\"name\":\"Alice\",\"age\":\"20\"}", outputBucket.get("Alice").content().toString());
+    Assert.assertEquals("{\"name\":\"Bob\",\"age\":\"30\"}", outputBucket.get("Bob").content().toString());
+    Assert.assertEquals("{\"name\":\"Chris\",\"age\":\"40\"}", outputBucket.get("Chris").content().toString());
+    Assert.assertEquals("{\"name\":\"David\",\"age\":\"50\"}", outputBucket.get("David").content().toString());
+
+    outputBucket.close();
   }
 
   static class JoinFunction
-      implements StreamTableJoinFunction<String, KV<String, String>, KV<String, String>, KV<String, String>> {
+      implements StreamTableJoinFunction<String, KV<String, String>, KV<String, String>, KV<String, JsonDocument>> {
 
     @Override
-    public KV<String, String> apply(KV<String, String> message, KV<String, String> record) {
-      return KV.of(message.getKey(), message.getValue() + record.getValue());
+    public KV<String, JsonDocument> apply(KV<String, String> message, KV<String, String> record) {
+      return KV.of(message.getKey(),
+          JsonDocument.create(message.key, JsonObject.create().put("name", message.key).put("age", record.getValue())));
     }
 
     @Override
@@ -159,6 +187,18 @@ public class TestCouchbaseRemoteTableEndToEnd extends AbstractIntegrationTestHar
     @Override
     public String getRecordKey(KV<String, String> record) {
       return record.getKey();
+    }
+  }
+
+  static class DummyReadFunction<K, V> implements TableReadFunction<K, V> {
+    @Override
+    public CompletableFuture<V> getAsync(K key) {
+      return null;
+    }
+
+    @Override
+    public boolean isRetriable(Throwable exception) {
+      return false;
     }
   }
 }
