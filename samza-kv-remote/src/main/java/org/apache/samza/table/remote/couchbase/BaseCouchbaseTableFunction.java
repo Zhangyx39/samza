@@ -22,6 +22,7 @@ package org.apache.samza.table.remote.couchbase;
 import com.couchbase.client.java.Bucket;
 import com.couchbase.client.java.Cluster;
 import com.couchbase.client.java.CouchbaseCluster;
+import com.couchbase.client.java.auth.CertAuthenticator;
 import com.couchbase.client.java.document.JsonDocument;
 import com.couchbase.client.java.env.CouchbaseEnvironment;
 import com.couchbase.client.java.env.DefaultCouchbaseEnvironment;
@@ -81,8 +82,10 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
   protected Integer bootstrapHttpSslPort = null;
 
   //TODO maybe we can create a builder class to create both read and write functions for the same bucket so that users don't need to type in the same things twice
-  public BaseCouchbaseTableFunction(String tableId, Class<V> valueClass, Collection<String> clusterNodes, String bucketName) {
-    Preconditions.checkArgument(StringUtils.isNotBlank(bucketName), "Table ßid is not allowed to be null, empty or blank.");
+  public BaseCouchbaseTableFunction(String tableId, Class<V> valueClass, Collection<String> clusterNodes,
+      String bucketName) {
+    Preconditions.checkArgument(StringUtils.isNotBlank(bucketName),
+        "Table ßid is not allowed to be null, empty or blank.");
     Preconditions.checkArgument(valueClass != null, "Value class is not allowed to be null.");
     Preconditions.checkArgument(CollectionUtils.isNotEmpty(clusterNodes),
         "Cluster nodes is not allowed to be null or empty.");
@@ -126,7 +129,9 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
     }
     env = envBuilder.build();
     cluster = CouchbaseCluster.create(env, clusterNodes);
-    if (username != null && password != null) {
+    if (certAuthEnabled) {
+      cluster.authenticate(CertAuthenticator.INSTANCE);
+    } else if (username != null && password != null) {
       cluster.authenticate(username, password);
     }
     bucket = cluster.openBucket(bucketName);
