@@ -24,7 +24,8 @@ import com.couchbase.client.deps.io.netty.util.ReferenceCountUtil;
 import com.couchbase.client.java.document.BinaryDocument;
 import com.couchbase.client.java.document.Document;
 import com.couchbase.client.java.document.JsonDocument;
-import java.util.Collection;
+import com.google.common.base.Preconditions;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.concurrent.CompletableFuture;
 import org.apache.samza.SamzaException;
@@ -40,65 +41,67 @@ public class CouchbaseTableReadFunction<V> extends BaseCouchbaseTableFunction<V>
     implements TableReadFunction<String, V> {
   private static final Logger LOGGER = LoggerFactory.getLogger(CouchbaseTableReadFunction.class);
 
-  public CouchbaseTableReadFunction(String tableId, Class<V> valueClass, Collection<String> clusterNodes,
-      String bucketName) {
-    super(tableId, valueClass, clusterNodes, bucketName);
+  public CouchbaseTableReadFunction(String bucketName, List<String> clusterNodes, Class<V> valueClass) {
+    super(bucketName, clusterNodes, valueClass);
   }
 
   @Override
   public void init(Context context) {
     super.init(context);
-    LOGGER.info(String.format("Read function for tableId %s, bucket %s initialized successfully", tableId, bucketName));
+    LOGGER.info(String.format("Read function for bucket %s initialized successfully", bucketName));
   }
 
   @Override
   public CompletableFuture<V> getAsync(String key) {
-    CompletableFuture<V> getFuture = new CompletableFuture<>();
-    Document document = useJsonDocumentValue ? JsonDocument.create(key) : BinaryDocument.create(key);
-    Single<Document> singleObservable = bucket.async().get(document, timeout, timeUnit).toSingle();
-    if (readRetryWhenFunction != null) {
-      singleObservable = singleObservable.retryWhen(readRetryWhenFunction);
-    }
+    Preconditions.checkNotNull(key);
+    CompletableFuture<V> future = new CompletableFuture<>();
+    Class<? extends Document<?>> documentType = useJsonDocumentValue ? JsonDocument.class : BinaryDocument.class;
+    Single<? extends Document<?>> singleObservable =
+        bucket.async().get(key, documentType, timeout, timeUnit).toSingle();
     singleObservable.subscribe(new SingleSubscriber<Document>() {
       @Override
-      public void onSuccess(Document v) {
-        if (v == null) {
-          getFuture.complete(null);
-        }
-        if (JsonDocument.class.isAssignableFrom(valueClass)) {
-          getFuture.complete((V) v);
-        } else {
-          ByteBuf buffer = (ByteBuf) v.content();
-          byte[] bytes;
-          if (buffer.hasArray() && buffer.arrayOffset() == 0 && buffer.readableBytes() == buffer.array().length) {
-            bytes = buffer.array();
+      public void onSuccess(Document document) {
+        if (document != null) {
+          if (document instanceof JsonDocument) {
+            future.complete((V) document);
           } else {
-            bytes = new byte[buffer.readableBytes()];
-            buffer.readBytes(bytes);
+            BinaryDocument binaryDocument = (BinaryDocument) document;
+            ByteBuf buffer = binaryDocument.content();
+            try {
+              byte[] bytes;
+              if (buffer.hasArray() && buffer.arrayOffset() == 0 && buffer.readableBytes() == buffer.array().length) {
+                bytes = buffer.array();
+              } else {
+                bytes = new byte[buffer.readableBytes()];
+                buffer.readBytes(bytes);
+              }
+              future.complete(valueSerde.fromBytes(bytes));
+            } catch (Exception e) {
+              future.completeExceptionally(
+                  new SamzaException(String.format("Failed to deserialize value of key %s with given serde", key), e));
+            } finally {
+              ReferenceCountUtil.release(buffer);
+            }
           }
-          getFuture.complete(valueSerde.fromBytes(bytes));
-          ReferenceCountUtil.release(buffer);
+        } else {
+          future.complete(null);
         }
       }
 
       @Override
-      public void onError(Throwable error) {
-        if (error instanceof NoSuchElementException) {
-          getFuture.complete(null);
+      public void onError(Throwable throwable) {
+        if (throwable instanceof NoSuchElementException) {
+          future.complete(null);
         } else {
-          getFuture.completeExceptionally(new SamzaException(String.format("Failed to get key %s", key), error));
+          future.completeExceptionally(new SamzaException(String.format("Failed to get key %s", key), throwable));
         }
       }
     });
-    return getFuture;
+    return future;
   }
 
   @Override
   public boolean isRetriable(Throwable throwable) {
-    if (readRetryWhenFunction != null) {
-      return false;
-    }
-    return false;
-    //TODO when do we allow retry?
+    return super.isRetriable(throwable);
   }
 }

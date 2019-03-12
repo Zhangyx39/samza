@@ -23,7 +23,8 @@ import com.couchbase.client.deps.io.netty.buffer.Unpooled;
 import com.couchbase.client.java.document.BinaryDocument;
 import com.couchbase.client.java.document.Document;
 import com.couchbase.client.java.document.JsonDocument;
-import java.util.Collection;
+import com.google.common.base.Preconditions;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import org.apache.samza.SamzaException;
 import org.apache.samza.context.Context;
@@ -38,70 +39,51 @@ public class CouchbaseTableWriteFunction<V> extends BaseCouchbaseTableFunction<V
     implements TableWriteFunction<String, V> {
   private static final Logger LOGGER = LoggerFactory.getLogger(CouchbaseTableWriteFunction.class);
 
-  public CouchbaseTableWriteFunction(String tableId, Class<V> valueClass, Collection<String> clusterNodes,
-      String bucketName) {
-    super(tableId, valueClass, clusterNodes, bucketName);
+  public CouchbaseTableWriteFunction(String bucketName, List<String> clusterNodes, Class<V> valueClass) {
+    super(bucketName, clusterNodes, valueClass);
   }
 
   @Override
   public void init(Context context) {
     super.init(context);
-    LOGGER.info(String.format("Write function for tableId %s, bucket %s initialized successfully", tableId, bucketName));
+    LOGGER.info(String.format("Write function for bucket %s initialized successfully", bucketName));
   }
 
   @Override
   public CompletableFuture<Void> putAsync(String key, V record) {
-    CompletableFuture<Void> putFuture = new CompletableFuture<>();
-    Document document = useJsonDocumentValue ? JsonDocument.create(key, ttl, ((JsonDocument) record).content())
+    Preconditions.checkNotNull(key);
+    Preconditions.checkNotNull(record);
+    Document<?> document = useJsonDocumentValue ? JsonDocument.create(key, ttl, ((JsonDocument) record).content())
         : BinaryDocument.create(key, ttl, Unpooled.copiedBuffer(valueSerde.toBytes(record)));
-    Single<Document> singleObservable = bucket.async().upsert(document, timeout, timeUnit).toSingle();
-    if (writeRetryWhenFunction != null) {
-      singleObservable = singleObservable.retryWhen(writeRetryWhenFunction);
-    }
-    singleObservable.subscribe(new SingleSubscriber<Document>() {
-      @Override
-      public void onSuccess(Document v) {
-        putFuture.complete(null);
-      }
-
-      @Override
-      public void onError(Throwable error) {
-        putFuture.completeExceptionally(
-            new SamzaException(String.format("Failed to insert key %s, value %s", key, record), error));
-      }
-    });
-    return putFuture;
+    return asyncWriteHelper(bucket.async().upsert(document, timeout, timeUnit).toSingle(),
+        String.format("Failed to insert key %s, value %s", key, record));
   }
 
-  //TODO deleting null key results in waiting forever
   @Override
   public CompletableFuture<Void> deleteAsync(String key) {
-    CompletableFuture<Void> deleteFuture = new CompletableFuture<>();
-    Document document = useJsonDocumentValue ? JsonDocument.create(key) : BinaryDocument.create(key);
-    Single<Document> singleObservable = bucket.async().remove(document, timeout, timeUnit).toSingle();
-    if (writeRetryWhenFunction != null) {
-      singleObservable = singleObservable.retryWhen(writeRetryWhenFunction);
-    }
-    singleObservable.subscribe(new SingleSubscriber<Document>() {
+    Preconditions.checkNotNull(key);
+    return asyncWriteHelper(bucket.async().remove(key, timeout, timeUnit).toSingle(),
+        String.format("Failed to delete key %s", key));
+  }
+
+  private CompletableFuture<Void> asyncWriteHelper(Single<? extends Document<?>> single, String errorMessage) {
+    CompletableFuture<Void> future = new CompletableFuture<>();
+    single.subscribe(new SingleSubscriber<Document>() {
       @Override
       public void onSuccess(Document v) {
-        deleteFuture.complete(null);
+        future.complete(null);
       }
 
       @Override
       public void onError(Throwable error) {
-        deleteFuture.completeExceptionally(new SamzaException(String.format("Failed to delete key %s", key), error));
+        future.completeExceptionally(new SamzaException(errorMessage, error));
       }
     });
-    return deleteFuture;
+    return future;
   }
 
   @Override
-  public boolean isRetriable(Throwable exception) {
-    if (writeRetryWhenFunction != null) {
-      return false;
-    }
-    return false;
-    //TODO when do we allow retry?
+  public boolean isRetriable(Throwable throwable) {
+    return super.isRetriable(throwable);
   }
 }
