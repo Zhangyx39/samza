@@ -80,7 +80,7 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
 
   @Override
   public void close() {
-    COUCHBASE_BUCKET_REGISTRY.closeBucket(bucketName);
+    COUCHBASE_BUCKET_REGISTRY.closeBucket(bucketName, clusterNodes);
   }
 
   public boolean isRetriable(Throwable exception) {

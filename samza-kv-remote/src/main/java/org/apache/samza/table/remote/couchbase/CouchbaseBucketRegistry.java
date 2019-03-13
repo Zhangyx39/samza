@@ -12,33 +12,46 @@ import java.util.List;
 
 public class CouchbaseBucketRegistry {
   private HashMap<String, Bucket> openedBuckets;
+  private HashMap<String, Cluster> openedClusters;
   private HashMap<String, Integer> bucketUsageCounts;
-  private HashMap<String, Cluster> bucketNameToClusterMap;
+  private HashMap<String, Integer> clusterUsageCounts;
 
   public CouchbaseBucketRegistry() {
     openedBuckets = new HashMap<>();
+    openedClusters = new HashMap<>();
     bucketUsageCounts = new HashMap<>();
-    bucketNameToClusterMap = new HashMap<>();
+    clusterUsageCounts = new HashMap<>();
   }
 
   public synchronized Bucket getBucket(String bucketName, List<String> clusterNodes,
       CouchbaseEnvironmentConfigs configs) {
-    if (!openedBuckets.containsKey(bucketName)) {
-      openBucket(bucketName, clusterNodes, configs);
+    String bucketId = getBucketId(bucketName, clusterNodes);
+    String clusterId = getClusterId(clusterNodes);
+    if (!openedClusters.containsKey(clusterId)) {
+      openedClusters.put(clusterId, openCluster(clusterNodes, configs));
     }
-    bucketUsageCounts.put(bucketName, bucketUsageCounts.getOrDefault(bucketName, 0) + 1);
-    return openedBuckets.get(bucketName);
+    if (!openedBuckets.containsKey(bucketId)) {
+      openedBuckets.put(bucketId, openBucket(bucketName, openedClusters.get(clusterId)));
+    }
+    bucketUsageCounts.put(bucketId, bucketUsageCounts.getOrDefault(bucketId, 0) + 1);
+    clusterUsageCounts.put(clusterId, clusterUsageCounts.getOrDefault(clusterId, 0) + 1);
+    return openedBuckets.get(bucketId);
   }
 
-  public synchronized void closeBucket(String bucketName) {
-    bucketUsageCounts.put(bucketName, bucketUsageCounts.get(bucketName) - 1);
-    if (bucketUsageCounts.get(bucketName) == 0) {
-      openedBuckets.get(bucketName).close();
-      bucketNameToClusterMap.get(bucketName).disconnect();
+  public synchronized void closeBucket(String bucketName, List<String> clusterNodes) {
+    String bucketId = getBucketId(bucketName, clusterNodes);
+    String clusterId = getClusterId(clusterNodes);
+    bucketUsageCounts.put(bucketId, bucketUsageCounts.get(bucketId) - 1);
+    clusterUsageCounts.put(clusterId, clusterUsageCounts.get(clusterId) - 1);
+    if (bucketUsageCounts.get(bucketId) == 0) {
+      openedBuckets.get(bucketId).close();
+      if (clusterUsageCounts.get(clusterId) == 0) {
+        openedClusters.get(clusterId).disconnect();
+      }
     }
   }
 
-  private void openBucket(String bucketName, List<String> clusterNodes, CouchbaseEnvironmentConfigs configs) {
+  private Cluster openCluster(List<String> clusterNodes, CouchbaseEnvironmentConfigs configs) {
     DefaultCouchbaseEnvironment.Builder envBuilder = new DefaultCouchbaseEnvironment.Builder();
     envBuilder.sslEnabled(configs.sslEnabled).certAuthEnabled(configs.certAuthEnabled);
     if (configs.sslKeystoreFile != null) {
@@ -72,6 +85,18 @@ public class CouchbaseBucketRegistry {
     } else if (configs.username != null && configs.password != null) {
       cluster.authenticate(configs.username, configs.password);
     }
-    openedBuckets.put(bucketName, cluster.openBucket(bucketName));
+    return cluster;
+  }
+
+  private Bucket openBucket(String bucketName, Cluster cluster) {
+    return cluster.openBucket(bucketName);
+  }
+
+  private String getBucketId(String bucketName, List<String> clusterNodes) {
+    return getClusterId(clusterNodes) + "-" + bucketName;
+  }
+
+  private String getClusterId(List<String> clusterNodes) {
+    return clusterNodes.toString();
   }
 }
