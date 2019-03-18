@@ -131,16 +131,16 @@ public class TestCouchbaseRemoteTableEndToEnd extends AbstractIntegrationTestHar
       GenericInputDescriptor<String> inputDescriptor =
           inputSystemDescriptor.getInputDescriptor("User", new NoOpSerde<>());
 
-      CouchbaseTableReadFunction<String> readFunction = new CouchbaseTableReadFunction<>("input-table", String.class,
-          Collections.singletonList("couchbase://127.0.0.1"), inputBucketName).withBootstrapCarrierDirectPort(
-          couchbaseMock.getCarrierPort(inputBucketName))
-          .withBootstrapHttpDirectPort(couchbaseMock.getHttpPort())
-          .withSerde(new StringSerde());
+      CouchbaseTableReadFunction<String> readFunction =
+          new CouchbaseTableReadFunction<>(inputBucketName, Collections.singletonList("couchbase://127.0.0.1"),
+              String.class).withBootstrapCarrierDirectPort(couchbaseMock.getCarrierPort(inputBucketName))
+              .withBootstrapHttpDirectPort(couchbaseMock.getHttpPort())
+              .withSerde(new StringSerde());
 
       CouchbaseTableWriteFunction<JsonDocument> writeFunction =
-          new CouchbaseTableWriteFunction<>("output-table", JsonDocument.class,
-              Collections.singletonList("couchbase://127.0.0.1"), outputBucketName).withBootstrapCarrierDirectPort(
-              couchbaseMock.getCarrierPort(outputBucketName)).withBootstrapHttpDirectPort(couchbaseMock.getHttpPort());
+          new CouchbaseTableWriteFunction<>(outputBucketName, Collections.singletonList("couchbase://127.0.0.1"),
+              JsonDocument.class).withBootstrapCarrierDirectPort(couchbaseMock.getCarrierPort(outputBucketName))
+              .withBootstrapHttpDirectPort(couchbaseMock.getHttpPort());
 
       RemoteTableDescriptor<String, String> inputTableDesc = new RemoteTableDescriptor<>("input-table");
       inputTableDesc.withReadFunction(readFunction);
