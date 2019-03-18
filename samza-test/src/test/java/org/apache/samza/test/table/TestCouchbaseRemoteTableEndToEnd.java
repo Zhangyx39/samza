@@ -135,7 +135,6 @@ public class TestCouchbaseRemoteTableEndToEnd extends AbstractIntegrationTestHar
               .withBootstrapHttpDirectPort(couchbaseMock.getHttpPort())
               .withSerde(new StringSerde());
 
-
       CouchbaseTableWriteFunction<JsonObject> writeFunction =
           new CouchbaseTableWriteFunction<>(outputBucketName, Collections.singletonList("couchbase://127.0.0.1"),
               JsonObject.class).withBootstrapCarrierDirectPort(couchbaseMock.getCarrierPort(outputBucketName))
