@@ -23,6 +23,7 @@ import com.couchbase.client.deps.io.netty.buffer.Unpooled;
 import com.couchbase.client.java.document.BinaryDocument;
 import com.couchbase.client.java.document.Document;
 import com.couchbase.client.java.document.JsonDocument;
+import com.couchbase.client.java.document.json.JsonObject;
 import com.google.common.base.Preconditions;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -53,7 +54,7 @@ public class CouchbaseTableWriteFunction<V> extends BaseCouchbaseTableFunction<V
   public CompletableFuture<Void> putAsync(String key, V record) {
     Preconditions.checkNotNull(key);
     Preconditions.checkNotNull(record);
-    Document<?> document = useJsonDocumentValue ? JsonDocument.create(key, ttl, ((JsonDocument) record).content())
+    Document<?> document = record instanceof JsonObject ? JsonDocument.create(key, ttl, (JsonObject) record)
         : BinaryDocument.create(key, ttl, Unpooled.copiedBuffer(valueSerde.toBytes(record)));
     return asyncWriteHelper(bucket.async().upsert(document, timeout, timeUnit).toSingle(),
         String.format("Failed to insert key %s, value %s", key, record));

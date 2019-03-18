@@ -20,7 +20,10 @@
 
 package org.apache.samza.table.remote.couchbase;
 
-public class CouchbaseEnvironmentConfigs {
+import java.io.Serializable;
+
+
+public class CouchbaseEnvironmentConfigs implements Serializable {
   public CouchbaseEnvironmentConfigs() {
   }
 

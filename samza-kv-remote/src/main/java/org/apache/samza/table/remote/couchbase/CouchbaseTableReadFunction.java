@@ -42,6 +42,7 @@ import com.couchbase.client.deps.io.netty.util.ReferenceCountUtil;
 import com.couchbase.client.java.document.BinaryDocument;
 import com.couchbase.client.java.document.Document;
 import com.couchbase.client.java.document.JsonDocument;
+import com.couchbase.client.java.document.json.JsonObject;
 import com.google.common.base.Preconditions;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -59,8 +60,11 @@ public class CouchbaseTableReadFunction<V> extends BaseCouchbaseTableFunction<V>
     implements TableReadFunction<String, V> {
   private static final Logger LOGGER = LoggerFactory.getLogger(CouchbaseTableReadFunction.class);
 
+  protected final Class<? extends Document<?>> documentType;
+
   public CouchbaseTableReadFunction(String bucketName, List<String> clusterNodes, Class<V> valueClass) {
     super(bucketName, clusterNodes, valueClass);
+    documentType = JsonObject.class.isAssignableFrom(valueClass) ? JsonDocument.class : BinaryDocument.class;
   }
 
   @Override
@@ -73,7 +77,6 @@ public class CouchbaseTableReadFunction<V> extends BaseCouchbaseTableFunction<V>
   public CompletableFuture<V> getAsync(String key) {
     Preconditions.checkNotNull(key);
     CompletableFuture<V> future = new CompletableFuture<>();
-    Class<? extends Document<?>> documentType = useJsonDocumentValue ? JsonDocument.class : BinaryDocument.class;
     Single<? extends Document<?>> singleObservable =
         bucket.async().get(key, documentType, timeout, timeUnit).toSingle();
     singleObservable.subscribe(new SingleSubscriber<Document>() {
@@ -81,7 +84,7 @@ public class CouchbaseTableReadFunction<V> extends BaseCouchbaseTableFunction<V>
       public void onSuccess(Document document) {
         if (document != null) {
           if (document instanceof JsonDocument) {
-            future.complete((V) document);
+            future.complete((V) document.content());
           } else {
             BinaryDocument binaryDocument = (BinaryDocument) document;
             ByteBuf buffer = binaryDocument.content();

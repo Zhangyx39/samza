@@ -23,7 +23,6 @@ import com.couchbase.client.java.Bucket;
 import com.couchbase.client.java.Cluster;
 import com.couchbase.client.java.CouchbaseCluster;
 import com.couchbase.client.java.document.ByteArrayDocument;
-import com.couchbase.client.java.document.JsonDocument;
 import com.couchbase.client.java.document.json.JsonObject;
 import com.couchbase.client.java.env.CouchbaseEnvironment;
 import com.couchbase.client.java.env.DefaultCouchbaseEnvironment;
@@ -99,13 +98,12 @@ public class TestCouchbaseRemoteTableEndToEnd extends AbstractIntegrationTestHar
 
   @After
   public void shutdownMock() {
-    cluster.disconnect();
-    couchbaseEnvironment.shutdownAsync().toBlocking().single();
-    couchbaseMock.stop();
+//    cluster.disconnect();
+//    couchbaseMock.stop();
   }
 
   @Test
-  public void testDummy() throws Exception {
+  public void testEndToEnd() throws Exception {
 
     Bucket inputBucket = cluster.openBucket(inputBucketName);
 
@@ -137,18 +135,19 @@ public class TestCouchbaseRemoteTableEndToEnd extends AbstractIntegrationTestHar
               .withBootstrapHttpDirectPort(couchbaseMock.getHttpPort())
               .withSerde(new StringSerde());
 
-      CouchbaseTableWriteFunction<JsonDocument> writeFunction =
+
+      CouchbaseTableWriteFunction<JsonObject> writeFunction =
           new CouchbaseTableWriteFunction<>(outputBucketName, Collections.singletonList("couchbase://127.0.0.1"),
-              JsonDocument.class).withBootstrapCarrierDirectPort(couchbaseMock.getCarrierPort(outputBucketName))
+              JsonObject.class).withBootstrapCarrierDirectPort(couchbaseMock.getCarrierPort(outputBucketName))
               .withBootstrapHttpDirectPort(couchbaseMock.getHttpPort());
 
       RemoteTableDescriptor<String, String> inputTableDesc = new RemoteTableDescriptor<>("input-table");
       inputTableDesc.withReadFunction(readFunction);
       Table<KV<String, String>> inputTable = appDesc.getTable(inputTableDesc);
 
-      RemoteTableDescriptor<String, JsonDocument> outputTableDesc = new RemoteTableDescriptor<>("output-table");
+      RemoteTableDescriptor<String, JsonObject> outputTableDesc = new RemoteTableDescriptor<>("output-table");
       outputTableDesc.withReadFunction(new DummyReadFunction<>()).withWriteFunction(writeFunction);
-      Table<KV<String, JsonDocument>> outputTable = appDesc.getTable(outputTableDesc);
+      Table<KV<String, JsonObject>> outputTable = appDesc.getTable(outputTableDesc);
 
       appDesc.getInputStream(inputDescriptor)
           .map(k -> KV.of(k, k))
@@ -171,12 +170,11 @@ public class TestCouchbaseRemoteTableEndToEnd extends AbstractIntegrationTestHar
   }
 
   static class JoinFunction
-      implements StreamTableJoinFunction<String, KV<String, String>, KV<String, String>, KV<String, JsonDocument>> {
+      implements StreamTableJoinFunction<String, KV<String, String>, KV<String, String>, KV<String, JsonObject>> {
 
     @Override
-    public KV<String, JsonDocument> apply(KV<String, String> message, KV<String, String> record) {
-      return KV.of(message.getKey(),
-          JsonDocument.create(message.key, JsonObject.create().put("name", message.key).put("age", record.getValue())));
+    public KV<String, JsonObject> apply(KV<String, String> message, KV<String, String> record) {
+      return KV.of(message.getKey(), JsonObject.create().put("name", message.key).put("age", record.getValue()));
     }
 
     @Override

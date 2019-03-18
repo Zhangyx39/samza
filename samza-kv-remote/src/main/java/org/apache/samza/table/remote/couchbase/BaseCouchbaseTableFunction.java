@@ -21,7 +21,6 @@ package org.apache.samza.table.remote.couchbase;
 
 import com.couchbase.client.java.Bucket;
 import com.couchbase.client.java.Cluster;
-import com.couchbase.client.java.document.JsonDocument;
 import com.couchbase.client.java.env.CouchbaseEnvironment;
 import com.couchbase.client.java.error.TemporaryFailureException;
 import com.couchbase.client.java.error.TemporaryLockFailureException;
@@ -47,8 +46,6 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
   protected transient Bucket bucket;
 
   // Function Settings
-  protected final Class<V> valueClass;
-  protected final Boolean useJsonDocumentValue;
   protected Serde<V> valueSerde = null;
   protected Long timeout = 0L;
   protected TimeUnit timeUnit = null;
@@ -68,8 +65,6 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
     Preconditions.checkArgument(valueClass != null, "Value class is not allowed to be null.");
     this.bucketName = bucketName;
     this.clusterNodes = ImmutableList.copyOf(clusterNodes);
-    this.valueClass = valueClass;
-    this.useJsonDocumentValue = JsonDocument.class.isAssignableFrom(valueClass);
     this.environmentConfigs = new CouchbaseEnvironmentConfigs();
   }
 
