@@ -98,8 +98,8 @@ public class TestCouchbaseRemoteTableEndToEnd extends AbstractIntegrationTestHar
 
   @After
   public void shutdownMock() {
-//    cluster.disconnect();
-//    couchbaseMock.stop();
+    cluster.disconnect();
+    couchbaseMock.stop();
   }
 
   @Test

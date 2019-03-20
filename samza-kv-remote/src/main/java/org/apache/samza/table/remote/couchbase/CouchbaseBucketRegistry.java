@@ -28,6 +28,7 @@ import com.couchbase.client.java.env.CouchbaseEnvironment;
 import com.couchbase.client.java.env.DefaultCouchbaseEnvironment;
 import java.util.HashMap;
 import java.util.List;
+import org.apache.samza.SamzaException;
 
 
 public class CouchbaseBucketRegistry {
@@ -73,7 +74,12 @@ public class CouchbaseBucketRegistry {
 
   private Cluster openCluster(List<String> clusterNodes, CouchbaseEnvironmentConfigs configs) {
     DefaultCouchbaseEnvironment.Builder envBuilder = new DefaultCouchbaseEnvironment.Builder();
-    envBuilder.sslEnabled(configs.sslEnabled).certAuthEnabled(configs.certAuthEnabled);
+    if (configs.sslEnabled != null) {
+      envBuilder.sslEnabled(configs.sslEnabled);
+    }
+    if (configs.certAuthEnabled != null) {
+      envBuilder.certAuthEnabled(configs.certAuthEnabled);
+    }
     if (configs.sslKeystoreFile != null) {
       envBuilder.sslKeystoreFile(configs.sslKeystoreFile);
     }
@@ -100,7 +106,7 @@ public class CouchbaseBucketRegistry {
     }
     CouchbaseEnvironment env = envBuilder.build();
     Cluster cluster = CouchbaseCluster.create(env, clusterNodes);
-    if (configs.certAuthEnabled) {
+    if (configs.sslEnabled != null && configs.sslEnabled) {
       cluster.authenticate(CertAuthenticator.INSTANCE);
     } else if (configs.username != null && configs.password != null) {
       cluster.authenticate(configs.username, configs.password);

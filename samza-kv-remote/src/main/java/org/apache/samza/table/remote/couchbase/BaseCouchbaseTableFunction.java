@@ -27,6 +27,7 @@ import com.couchbase.client.java.error.TemporaryLockFailureException;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import java.io.Serializable;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.apache.commons.collections4.CollectionUtils;
@@ -47,8 +48,7 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
 
   // Function Settings
   protected Serde<V> valueSerde = null;
-  protected Long timeout = 0L;
-  protected TimeUnit timeUnit = null;
+  protected Duration timeout = Duration.ZERO;
   protected Integer ttl = 0; // default value 0 means no ttl, data will be stored forever
 
   // Cluster Settings
@@ -86,9 +86,8 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
     return exception != null;
   }
 
-  public <T extends BaseCouchbaseTableFunction<V>> T withTimeout(long timeout, TimeUnit timeUnit) {
+  public <T extends BaseCouchbaseTableFunction<V>> T withTimeout(Duration timeout) {
     this.timeout = timeout;
-    this.timeUnit = timeUnit;
     return (T) this;
   }
 
@@ -103,12 +102,20 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
   }
 
   public <T extends BaseCouchbaseTableFunction<V>> T withUsernameAndPassword(String username, String password) {
+    if (environmentConfigs.sslEnabled) {
+      throw new IllegalArgumentException(
+          "Role-Based Access Control and Certificate-Based Authentication cannot be used together.");
+    }
     environmentConfigs.username = username;
     environmentConfigs.password = password;
     return (T) this;
   }
 
   public <T extends BaseCouchbaseTableFunction<V>> T withSslEnabled(boolean sslEnabled) {
+    if (environmentConfigs.username != null && sslEnabled) {
+      throw new IllegalArgumentException(
+          "Role-Based Access Control and Certificate-Based Authentication cannot be used together.");
+    }
     environmentConfigs.sslEnabled = sslEnabled;
     return (T) this;
   }

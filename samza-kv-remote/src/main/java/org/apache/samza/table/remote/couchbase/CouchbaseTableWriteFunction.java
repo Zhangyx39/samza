@@ -27,6 +27,7 @@ import com.couchbase.client.java.document.json.JsonObject;
 import com.google.common.base.Preconditions;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import org.apache.samza.SamzaException;
 import org.apache.samza.context.Context;
 import org.apache.samza.table.remote.TableWriteFunction;
@@ -56,14 +57,14 @@ public class CouchbaseTableWriteFunction<V> extends BaseCouchbaseTableFunction<V
     Preconditions.checkNotNull(record);
     Document<?> document = record instanceof JsonObject ? JsonDocument.create(key, ttl, (JsonObject) record)
         : BinaryDocument.create(key, ttl, Unpooled.copiedBuffer(valueSerde.toBytes(record)));
-    return asyncWriteHelper(bucket.async().upsert(document, timeout, timeUnit).toSingle(),
+    return asyncWriteHelper(bucket.async().upsert(document, timeout.toMillis(), TimeUnit.MILLISECONDS).toSingle(),
         String.format("Failed to insert key %s, value %s", key, record));
   }
 
   @Override
   public CompletableFuture<Void> deleteAsync(String key) {
     Preconditions.checkNotNull(key);
-    return asyncWriteHelper(bucket.async().remove(key, timeout, timeUnit).toSingle(),
+    return asyncWriteHelper(bucket.async().remove(key, timeout.toMillis(), TimeUnit.MILLISECONDS).toSingle(),
         String.format("Failed to delete key %s", key));
   }
 
@@ -81,10 +82,5 @@ public class CouchbaseTableWriteFunction<V> extends BaseCouchbaseTableFunction<V
       }
     });
     return future;
-  }
-
-  @Override
-  public boolean isRetriable(Throwable throwable) {
-    return super.isRetriable(throwable);
   }
 }

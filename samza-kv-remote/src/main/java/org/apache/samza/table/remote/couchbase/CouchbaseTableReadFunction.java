@@ -44,9 +44,11 @@ import com.couchbase.client.java.document.Document;
 import com.couchbase.client.java.document.JsonDocument;
 import com.couchbase.client.java.document.json.JsonObject;
 import com.google.common.base.Preconditions;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import org.apache.samza.SamzaException;
 import org.apache.samza.context.Context;
 import org.apache.samza.table.remote.TableReadFunction;
@@ -78,7 +80,7 @@ public class CouchbaseTableReadFunction<V> extends BaseCouchbaseTableFunction<V>
     Preconditions.checkNotNull(key);
     CompletableFuture<V> future = new CompletableFuture<>();
     Single<? extends Document<?>> singleObservable =
-        bucket.async().get(key, documentType, timeout, timeUnit).toSingle();
+        bucket.async().get(key, documentType, timeout.toMillis(), TimeUnit.MILLISECONDS).toSingle();
     singleObservable.subscribe(new SingleSubscriber<Document>() {
       @Override
       public void onSuccess(Document document) {
@@ -119,10 +121,5 @@ public class CouchbaseTableReadFunction<V> extends BaseCouchbaseTableFunction<V>
       }
     });
     return future;
-  }
-
-  @Override
-  public boolean isRetriable(Throwable throwable) {
-    return super.isRetriable(throwable);
   }
 }

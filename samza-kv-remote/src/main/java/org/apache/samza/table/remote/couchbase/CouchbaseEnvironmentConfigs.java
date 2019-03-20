@@ -27,18 +27,18 @@ public class CouchbaseEnvironmentConfigs implements Serializable {
   public CouchbaseEnvironmentConfigs() {
   }
 
-  protected Boolean sslEnabled = false;
-  protected Boolean certAuthEnabled = false;
-  protected String sslKeystoreFile = null;
-  protected String sslKeystorePassword = null;
-  protected String sslTruststoreFile = null;
-  protected String sslTruststorePassword = null;
-  protected Integer bootstrapCarrierDirectPort = null;
-  protected Integer bootstrapCarrierSslPort = null;
-  protected Integer bootstrapHttpDirectPort = null;
-  protected Integer bootstrapHttpSslPort = null;
-  protected String username = null;
-  protected String password = null;
+  protected Boolean sslEnabled;
+  protected Boolean certAuthEnabled;
+  protected String sslKeystoreFile;
+  protected String sslKeystorePassword;
+  protected String sslTruststoreFile;
+  protected String sslTruststorePassword;
+  protected Integer bootstrapCarrierDirectPort;
+  protected Integer bootstrapCarrierSslPort;
+  protected Integer bootstrapHttpDirectPort;
+  protected Integer bootstrapHttpSslPort;
+  protected String username;
+  protected String password;
 
   public Boolean getSslEnabled() {
     return sslEnabled;
