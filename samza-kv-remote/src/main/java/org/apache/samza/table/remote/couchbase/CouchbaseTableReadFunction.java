@@ -44,7 +44,6 @@ import com.couchbase.client.java.document.Document;
 import com.couchbase.client.java.document.JsonDocument;
 import com.couchbase.client.java.document.json.JsonObject;
 import com.google.common.base.Preconditions;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.concurrent.CompletableFuture;
@@ -81,30 +80,15 @@ public class CouchbaseTableReadFunction<V> extends BaseCouchbaseTableFunction<V>
     CompletableFuture<V> future = new CompletableFuture<>();
     Single<? extends Document<?>> singleObservable =
         bucket.async().get(key, documentType, timeout.toMillis(), TimeUnit.MILLISECONDS).toSingle();
-    singleObservable.subscribe(new SingleSubscriber<Document>() {
+    singleObservable.subscribe(new SingleSubscriber<Document<?>>() {
       @Override
-      public void onSuccess(Document document) {
+      public void onSuccess(Document<?> document) {
         if (document != null) {
-          if (document instanceof JsonDocument) {
-            future.complete((V) document.content());
+          if (document instanceof BinaryDocument) {
+            handleGetAsyncBinaryDocument((BinaryDocument) document, future, key);
           } else {
-            BinaryDocument binaryDocument = (BinaryDocument) document;
-            ByteBuf buffer = binaryDocument.content();
-            try {
-              byte[] bytes;
-              if (buffer.hasArray() && buffer.arrayOffset() == 0 && buffer.readableBytes() == buffer.array().length) {
-                bytes = buffer.array();
-              } else {
-                bytes = new byte[buffer.readableBytes()];
-                buffer.readBytes(bytes);
-              }
-              future.complete(valueSerde.fromBytes(bytes));
-            } catch (Exception e) {
-              future.completeExceptionally(
-                  new SamzaException(String.format("Failed to deserialize value of key %s with given serde", key), e));
-            } finally {
-              ReferenceCountUtil.release(buffer);
-            }
+            // V is of type JsonObject
+            future.complete((V) document.content());
           }
         } else {
           future.complete(null);
@@ -114,6 +98,7 @@ public class CouchbaseTableReadFunction<V> extends BaseCouchbaseTableFunction<V>
       @Override
       public void onError(Throwable throwable) {
         if (throwable instanceof NoSuchElementException) {
+          // There is no element returned by the observable, meaning the key doesn't exist.
           future.complete(null);
         } else {
           future.completeExceptionally(new SamzaException(String.format("Failed to get key %s", key), throwable));
@@ -121,5 +106,24 @@ public class CouchbaseTableReadFunction<V> extends BaseCouchbaseTableFunction<V>
       }
     });
     return future;
+  }
+
+  private void handleGetAsyncBinaryDocument(BinaryDocument binaryDocument, CompletableFuture<V> future, String key) {
+    ByteBuf buffer = binaryDocument.content();
+    try {
+      byte[] bytes;
+      if (buffer.hasArray() && buffer.arrayOffset() == 0 && buffer.readableBytes() == buffer.array().length) {
+        bytes = buffer.array();
+      } else {
+        bytes = new byte[buffer.readableBytes()];
+        buffer.readBytes(bytes);
+      }
+      future.complete(valueSerde.fromBytes(bytes));
+    } catch (Exception e) {
+      future.completeExceptionally(
+          new SamzaException(String.format("Failed to deserialize value of key %s with given serde", key), e));
+    } finally {
+      ReferenceCountUtil.release(buffer);
+    }
   }
 }

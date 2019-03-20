@@ -55,8 +55,9 @@ public class CouchbaseTableWriteFunction<V> extends BaseCouchbaseTableFunction<V
   public CompletableFuture<Void> putAsync(String key, V record) {
     Preconditions.checkNotNull(key);
     Preconditions.checkNotNull(record);
-    Document<?> document = record instanceof JsonObject ? JsonDocument.create(key, ttl, (JsonObject) record)
-        : BinaryDocument.create(key, ttl, Unpooled.copiedBuffer(valueSerde.toBytes(record)));
+    Document<?> document =
+        record instanceof JsonObject ? JsonDocument.create(key, (int) ttl.getSeconds(), (JsonObject) record)
+            : BinaryDocument.create(key, (int) ttl.getSeconds(), Unpooled.copiedBuffer(valueSerde.toBytes(record)));
     return asyncWriteHelper(bucket.async().upsert(document, timeout.toMillis(), TimeUnit.MILLISECONDS).toSingle(),
         String.format("Failed to insert key %s, value %s", key, record));
   }

@@ -20,8 +20,6 @@
 package org.apache.samza.table.remote.couchbase;
 
 import com.couchbase.client.java.Bucket;
-import com.couchbase.client.java.Cluster;
-import com.couchbase.client.java.env.CouchbaseEnvironment;
 import com.couchbase.client.java.error.TemporaryFailureException;
 import com.couchbase.client.java.error.TemporaryLockFailureException;
 import com.google.common.base.Preconditions;
@@ -29,7 +27,6 @@ import com.google.common.collect.ImmutableList;
 import java.io.Serializable;
 import java.time.Duration;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.samza.context.Context;
@@ -42,14 +39,12 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
 
   // Clients
   private final static CouchbaseBucketRegistry COUCHBASE_BUCKET_REGISTRY = new CouchbaseBucketRegistry();
-  protected transient CouchbaseEnvironment env;
-  protected transient Cluster cluster;
   protected transient Bucket bucket;
 
   // Function Settings
   protected Serde<V> valueSerde = null;
   protected Duration timeout = Duration.ZERO;
-  protected Integer ttl = 0; // default value 0 means no ttl, data will be stored forever
+  protected Duration ttl = Duration.ZERO; // default value 0 means no ttl, data will be stored forever
 
   // Cluster Settings
   protected final List<String> clusterNodes;
@@ -91,7 +86,7 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
     return (T) this;
   }
 
-  public <T extends BaseCouchbaseTableFunction<V>> T withTtl(int ttl) {
+  public <T extends BaseCouchbaseTableFunction<V>> T withTtl(Duration ttl) {
     this.ttl = ttl;
     return (T) this;
   }
@@ -111,36 +106,31 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
     return (T) this;
   }
 
-  public <T extends BaseCouchbaseTableFunction<V>> T withSslEnabled(boolean sslEnabled) {
+  public <T extends BaseCouchbaseTableFunction<V>> T withSslEnabledAndCertAuthEnabled(boolean sslEnabled,
+      boolean certAuthEnabled) {
     if (environmentConfigs.username != null && sslEnabled) {
       throw new IllegalArgumentException(
           "Role-Based Access Control and Certificate-Based Authentication cannot be used together.");
     }
+    if (certAuthEnabled && !sslEnabled) {
+      throw new IllegalStateException(
+          "Client Certificate Authentication enabled, but SSL is not - " + "please configure encryption properly.");
+    }
     environmentConfigs.sslEnabled = sslEnabled;
-    return (T) this;
-  }
-
-  public <T extends BaseCouchbaseTableFunction<V>> T withCertAuthEnabled(boolean certAuthEnabled) {
     environmentConfigs.certAuthEnabled = certAuthEnabled;
     return (T) this;
   }
 
-  public <T extends BaseCouchbaseTableFunction<V>> T withSslKeystoreFile(String sslKeystoreFile) {
+  public <T extends BaseCouchbaseTableFunction<V>> T withSslKeystoreFileAndPassword(String sslKeystoreFile,
+      String sslKeystorePassword) {
     environmentConfigs.sslKeystoreFile = sslKeystoreFile;
-    return (T) this;
-  }
-
-  public <T extends BaseCouchbaseTableFunction<V>> T withSslKeystorePassword(String sslKeystorePassword) {
     environmentConfigs.sslKeystorePassword = sslKeystorePassword;
     return (T) this;
   }
 
-  public <T extends BaseCouchbaseTableFunction<V>> T withSslTruststoreFile(String sslTruststoreFile) {
+  public <T extends BaseCouchbaseTableFunction<V>> T withSslTruststoreFileAndPassword(String sslTruststoreFile,
+      String sslTruststorePassword) {
     environmentConfigs.sslTruststoreFile = sslTruststoreFile;
-    return (T) this;
-  }
-
-  public <T extends BaseCouchbaseTableFunction<V>> T withSslTruststorePassword(String sslTruststorePassword) {
     environmentConfigs.sslTruststorePassword = sslTruststorePassword;
     return (T) this;
   }
