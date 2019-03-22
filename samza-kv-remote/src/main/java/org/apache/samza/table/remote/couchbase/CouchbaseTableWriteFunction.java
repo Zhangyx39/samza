@@ -36,21 +36,40 @@ import org.slf4j.LoggerFactory;
 import rx.Single;
 import rx.SingleSubscriber;
 
-
+/**
+ * TableWriteFunction implementation for writing to Couchbase. The value type can be either {@link JsonObject} or
+ * any other Object. If the value type is JsonObject, data will be stored in Couchbase in JSON format, which can be
+ * queried with N1QL. Otherwise, a {@link org.apache.samza.serializers.Serde} needs to be provided to serialize and
+ * deserialize the value object.
+ * @param <V> Type of values to write to Couchbase
+ */
 public class CouchbaseTableWriteFunction<V> extends BaseCouchbaseTableFunction<V>
     implements TableWriteFunction<String, V> {
   private static final Logger LOGGER = LoggerFactory.getLogger(CouchbaseTableWriteFunction.class);
 
+  /**
+   * Construct an instance of {@link CouchbaseTableWriteFunction}.
+   * @param bucketName Name of the couchbase bucket
+   * @param clusterNodes Some Hosts of the Couchbase cluster. Recommended to provide more than one nodes so that if
+   *                     the first node could not be connected, other nodes can be tried.
+   * @param valueClass Type of values
+   */
   public CouchbaseTableWriteFunction(String bucketName, List<String> clusterNodes, Class<V> valueClass) {
     super(bucketName, clusterNodes, valueClass);
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public void init(Context context) {
     super.init(context);
     LOGGER.info(String.format("Write function for bucket %s initialized successfully", bucketName));
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public CompletableFuture<Void> putAsync(String key, V record) {
     Preconditions.checkNotNull(key);
@@ -62,6 +81,9 @@ public class CouchbaseTableWriteFunction<V> extends BaseCouchbaseTableFunction<V
         String.format("Failed to insert key %s, value %s", key, record));
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public CompletableFuture<Void> deleteAsync(String key) {
     Preconditions.checkNotNull(key);
@@ -69,6 +91,9 @@ public class CouchbaseTableWriteFunction<V> extends BaseCouchbaseTableFunction<V
         String.format("Failed to delete key %s", key));
   }
 
+  /**
+   * Helper method for putAsync and deleteAsync to convert Single to CompletableFuture.
+   */
   private CompletableFuture<Void> asyncWriteHelper(Single<? extends Document<?>> single, String errorMessage) {
     CompletableFuture<Void> future = new CompletableFuture<>();
     single.subscribe(new SingleSubscriber<Document>() {

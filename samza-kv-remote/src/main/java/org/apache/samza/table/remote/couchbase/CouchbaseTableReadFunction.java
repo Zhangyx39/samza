@@ -57,23 +57,43 @@ import rx.Single;
 import rx.SingleSubscriber;
 
 
+/**
+ * TableReadFunction implementation for reading from Couchbase. The value type can be either {@link JsonObject} or
+ * any other Object. If the value type is JsonObject, data in JSON format will be read from Couchbase directly as
+ * JsonObject. Otherwise, a {@link org.apache.samza.serializers.Serde} needs to be provided to serialize and
+ * deserialize the value object.
+ * @param <V> Type of values to read from Couchbase
+ */
 public class CouchbaseTableReadFunction<V> extends BaseCouchbaseTableFunction<V>
     implements TableReadFunction<String, V> {
   private static final Logger LOGGER = LoggerFactory.getLogger(CouchbaseTableReadFunction.class);
 
   protected final Class<? extends Document<?>> documentType;
 
+  /**
+   * Construct an instance of {@link CouchbaseTableReadFunction}.
+   * @param bucketName Name of the couchbase bucket
+   * @param clusterNodes Some Hosts of the Couchbase cluster. Recommended to provide more than one nodes so that if
+   *                     the first node could not be connected, other nodes can be tried.
+   * @param valueClass Type of values
+   */
   public CouchbaseTableReadFunction(String bucketName, List<String> clusterNodes, Class<V> valueClass) {
     super(bucketName, clusterNodes, valueClass);
     documentType = JsonObject.class.isAssignableFrom(valueClass) ? JsonDocument.class : BinaryDocument.class;
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public void init(Context context) {
     super.init(context);
     LOGGER.info(String.format("Read function for bucket %s initialized successfully", bucketName));
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public CompletableFuture<V> getAsync(String key) {
     Preconditions.checkNotNull(key);
@@ -108,6 +128,9 @@ public class CouchbaseTableReadFunction<V> extends BaseCouchbaseTableFunction<V>
     return future;
   }
 
+  /**
+   * Helper method to read bytes from binaryDocument and release the buffer.
+   */
   private void handleGetAsyncBinaryDocument(BinaryDocument binaryDocument, CompletableFuture<V> future, String key) {
     ByteBuf buffer = binaryDocument.content();
     try {

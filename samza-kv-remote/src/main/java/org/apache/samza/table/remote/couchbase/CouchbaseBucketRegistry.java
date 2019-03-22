@@ -28,7 +28,6 @@ import com.couchbase.client.java.env.CouchbaseEnvironment;
 import com.couchbase.client.java.env.DefaultCouchbaseEnvironment;
 import java.util.HashMap;
 import java.util.List;
-import org.apache.samza.SamzaException;
 
 
 public class CouchbaseBucketRegistry {
