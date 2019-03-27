@@ -73,6 +73,7 @@ public class CouchbaseTableWriteFunction<V> extends BaseCouchbaseTableFunction<V
   @Override
   public CompletableFuture<Void> putAsync(String key, V record) {
     Preconditions.checkNotNull(key);
+    Preconditions.checkArgument(!key.contains(" "), "key must not contain spaces.");
     Preconditions.checkNotNull(record);
     Document<?> document =
         record instanceof JsonObject ? JsonDocument.create(key, (int) ttl.getSeconds(), (JsonObject) record)

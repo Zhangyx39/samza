@@ -718,6 +718,10 @@ project(":samza-kv-remote_$scalaSuffix") {
     compile "com.couchbase.client:java-client:$couchbaseClientVersion"
     compile "com.couchbase.client:encryption:$couchbaseEncryptionVersion"
     testCompile "junit:junit:$junitVersion"
+    testCompile "org.mockito:mockito-core:$mockitoVersion"
+    testCompile "org.powermock:powermock-api-mockito:$powerMockVersion"
+    testCompile "org.powermock:powermock-core:$powerMockVersion"
+    testCompile "org.powermock:powermock-module-junit4:$powerMockVersion"
     testCompile "org.scalatest:scalatest_$scalaSuffix:$scalaTestVersion"
   }
 }

@@ -58,17 +58,27 @@ public class CouchbaseBucketRegistry {
     return openedBuckets.get(bucketId);
   }
 
-  public synchronized void closeBucket(String bucketName, List<String> clusterNodes) {
+  public synchronized Boolean closeBucket(String bucketName, List<String> clusterNodes) {
     String bucketId = getBucketId(bucketName, clusterNodes);
     String clusterId = getClusterId(clusterNodes);
+    if (!openedBuckets.containsKey(bucketId) || !openedClusters.containsKey(clusterId)) {
+      return false;
+    }
     bucketUsageCounts.put(bucketId, bucketUsageCounts.get(bucketId) - 1);
     clusterUsageCounts.put(clusterId, clusterUsageCounts.get(clusterId) - 1);
+    Boolean bucketClosed = true;
+    Boolean clusterClosed = true;
     if (bucketUsageCounts.get(bucketId) == 0) {
-      openedBuckets.get(bucketId).close();
+      bucketClosed = openedBuckets.get(bucketId).close();
+      openedBuckets.remove(bucketId);
+      bucketUsageCounts.remove(bucketId);
       if (clusterUsageCounts.get(clusterId) == 0) {
-        openedClusters.get(clusterId).disconnect();
+        clusterClosed = openedClusters.get(clusterId).disconnect();
+        openedClusters.remove(clusterId);
+        clusterUsageCounts.remove(clusterId);
       }
     }
+    return bucketClosed && clusterClosed;
   }
 
   private Cluster openCluster(List<String> clusterNodes, CouchbaseEnvironmentConfigs configs) {
