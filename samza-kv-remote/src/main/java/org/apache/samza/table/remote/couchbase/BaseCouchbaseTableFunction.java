@@ -47,7 +47,7 @@ public abstract class BaseCouchbaseTableFunction<V> implements InitableFunction,
 
   // Function Settings
   protected Serde<V> valueSerde = null;
-  protected Duration timeout = Duration.ZERO;
+  protected Duration timeout = Duration.ZERO; // default value 0 means no timeout
   protected Duration ttl = Duration.ZERO; // default value 0 means no ttl, data will be stored forever
 
   // Cluster Settings

@@ -29,13 +29,20 @@ import com.couchbase.client.java.env.DefaultCouchbaseEnvironment;
 import java.util.HashMap;
 import java.util.List;
 
-
+/**
+ * The CouchbaseBucketRegistry is intended to reuse the same {@link Cluster} instance given same clusterNodes and reuse
+ * the same {@link Bucket] given same bucketName}. Instantiating a Bucket is expensive. Different tasks within a
+ * container that is using the same bucket should use this registry to avoid creating multiple Buckets.
+ */
 public class CouchbaseBucketRegistry {
   private HashMap<String, Bucket> openedBuckets;
   private HashMap<String, Cluster> openedClusters;
   private HashMap<String, Integer> bucketUsageCounts;
   private HashMap<String, Integer> clusterUsageCounts;
 
+  /**
+   * Constructor of the CouchbaseTableRegistry.
+   */
   public CouchbaseBucketRegistry() {
     openedBuckets = new HashMap<>();
     openedClusters = new HashMap<>();
@@ -43,6 +50,14 @@ public class CouchbaseBucketRegistry {
     clusterUsageCounts = new HashMap<>();
   }
 
+  /**
+   * A synchronized method to open a bucket given the bucket name and cluster nodes. Once a bucket has been opened,
+   * the reference of the bucket will be stored in the registry, and the same reference will be returned given same
+   * bucket name. Each time this method is called, the counter of usage of the bucket is increased by one.
+   * @param bucketName name of the bucket to be opened
+   * @param clusterNodes list of cluster nodes
+   * @return A Bucket instance associated with the bucket name and cluster nodes
+   */
   public synchronized Bucket getBucket(String bucketName, List<String> clusterNodes,
       CouchbaseEnvironmentConfigs configs) {
     String bucketId = getBucketId(bucketName, clusterNodes);
@@ -58,6 +73,13 @@ public class CouchbaseBucketRegistry {
     return openedBuckets.get(bucketId);
   }
 
+  /**
+   * A synchronized method to close a bucket given the bucket name. Each time this method is called, the counter of
+   * usage of the bucket is decreased by one. Only when the counter becomes zero will the bucket be actually closed.
+   * Same for cluster, only when all buckets within a cluster have been closed will the cluster be closed.
+   * @param bucketName name of the bucket to be opened
+   * @param clusterNodes list of cluster nodes
+   */
   public synchronized Boolean closeBucket(String bucketName, List<String> clusterNodes) {
     String bucketId = getBucketId(bucketName, clusterNodes);
     String clusterId = getClusterId(clusterNodes);
@@ -81,6 +103,9 @@ public class CouchbaseBucketRegistry {
     return bucketClosed && clusterClosed;
   }
 
+  /**
+   * Helper method to open a cluster given cluster nodes and environment configurations.
+   */
   private Cluster openCluster(List<String> clusterNodes, CouchbaseEnvironmentConfigs configs) {
     DefaultCouchbaseEnvironment.Builder envBuilder = new DefaultCouchbaseEnvironment.Builder();
     if (configs.sslEnabled != null) {
@@ -123,14 +148,23 @@ public class CouchbaseBucketRegistry {
     return cluster;
   }
 
+  /**
+   * Helper method to open a bucket with given bucket name and cluster
+   */
   private Bucket openBucket(String bucketName, Cluster cluster) {
     return cluster.openBucket(bucketName);
   }
 
+  /**
+   * Generate a unique bucketId given bucket name and cluster nodes.
+   */
   private String getBucketId(String bucketName, List<String> clusterNodes) {
     return getClusterId(clusterNodes) + "-" + bucketName;
   }
 
+  /**
+   * Generate a unique clusterId given cluster nodes.
+   */
   private String getClusterId(List<String> clusterNodes) {
     return clusterNodes.toString();
   }

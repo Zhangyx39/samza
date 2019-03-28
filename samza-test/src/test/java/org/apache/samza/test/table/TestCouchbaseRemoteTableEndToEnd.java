@@ -98,7 +98,6 @@ public class TestCouchbaseRemoteTableEndToEnd extends AbstractIntegrationTestHar
 
   @After
   public void shutdownMock() {
-    cluster.disconnect();
     couchbaseMock.stop();
   }
 
@@ -106,12 +105,10 @@ public class TestCouchbaseRemoteTableEndToEnd extends AbstractIntegrationTestHar
   public void testEndToEnd() throws Exception {
 
     Bucket inputBucket = cluster.openBucket(inputBucketName);
-
     inputBucket.upsert(ByteArrayDocument.create("Alice", "20".getBytes()));
     inputBucket.upsert(ByteArrayDocument.create("Bob", "30".getBytes()));
     inputBucket.upsert(ByteArrayDocument.create("Chris", "40".getBytes()));
     inputBucket.upsert(ByteArrayDocument.create("David", "50".getBytes()));
-
     inputBucket.close();
 
     String[] users = new String[]{"Alice", "Bob", "Chris", "David"};
@@ -159,12 +156,10 @@ public class TestCouchbaseRemoteTableEndToEnd extends AbstractIntegrationTestHar
     runner.waitForFinish();
 
     Bucket outputBucket = cluster.openBucket(outputBucketName);
-
     Assert.assertEquals("{\"name\":\"Alice\",\"age\":\"20\"}", outputBucket.get("Alice").content().toString());
     Assert.assertEquals("{\"name\":\"Bob\",\"age\":\"30\"}", outputBucket.get("Bob").content().toString());
     Assert.assertEquals("{\"name\":\"Chris\",\"age\":\"40\"}", outputBucket.get("Chris").content().toString());
     Assert.assertEquals("{\"name\":\"David\",\"age\":\"50\"}", outputBucket.get("David").content().toString());
-
     outputBucket.close();
   }
 
