@@ -48,7 +48,7 @@ import org.apache.samza.table.descriptors.RemoteTableDescriptor;
 import org.apache.samza.table.remote.TableReadFunction;
 import org.apache.samza.table.remote.couchbase.CouchbaseTableReadFunction;
 import org.apache.samza.table.remote.couchbase.CouchbaseTableWriteFunction;
-import org.apache.samza.test.harness.AbstractIntegrationTestHarness;
+import org.apache.samza.test.harness.IntegrationTestHarness;
 import org.apache.samza.test.util.Base64Serializer;
 import org.junit.After;
 import org.junit.Assert;
@@ -56,7 +56,14 @@ import org.junit.Before;
 import org.junit.Test;
 
 
-public class TestCouchbaseRemoteTableEndToEnd extends AbstractIntegrationTestHarness {
+/**
+ * This class does a end to end testing for Couchbase table functions. It puts some data to an in-memory stream and a
+ * mocked Couchbase bucket. Then it does a join between the stream and the Couchbase table. Finally it writes the
+ * result to another mocked Couchbase bucket and assert the result to be what we expect. Due to the problem of
+ * CouchbaseMock library, closing a mocked bucket would throw exceptions like: java.lang.ArithmeticException: / by zero.
+ * Please ignore those exception.
+ */
+public class TestCouchbaseRemoteTableEndToEnd extends IntegrationTestHarness {
   protected CouchbaseEnvironment couchbaseEnvironment;
   protected CouchbaseMock couchbaseMock;
   protected Cluster cluster;
